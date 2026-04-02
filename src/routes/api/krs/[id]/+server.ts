@@ -3,6 +3,26 @@ import { prisma } from '$lib/server/prisma';
 import { apiError, apiMessage, apiOk, handleApiError, parseIdParam, readRequestBody } from '$lib/server/http';
 import { validateKRSUpdate } from '$lib/server/validation';
 
+const krsDetailInclude = {
+	mahasiswa: {
+		select: {
+			id: true,
+			nim: true,
+			nama: true,
+			ipk: true,
+			programStudi: {
+				select: { id: true, kode: true, nama: true }
+			}
+		}
+	},
+	semester: { select: { id: true, tahunAjaran: true, semester: true, isActive: true } },
+	details: {
+		include: {
+			mataKuliah: { select: { id: true, kode: true, nama: true, sks: true, semester: true } }
+		}
+	}
+} as const;
+
 // GET /api/krs/[id] - Get KRS by ID
 export const GET: RequestHandler = async ({ params }) => {
 	try {
@@ -10,26 +30,14 @@ export const GET: RequestHandler = async ({ params }) => {
 
 		const krs = await prisma.kRS.findUnique({
 			where: { id },
-			include: {
-				mahasiswa: {
-					select: { id: true, nim: true, nama: true, ipk: true },
-					include: { programStudi: { select: { id: true, kode: true, nama: true } } }
-				},
-				semester: { select: { id: true, tahunAjaran: true, semester: true, isActive: true } },
-				details: {
-					include: {
-						mataKuliah: { select: { id: true, kode: true, nama: true, sks: true, semester: true } }
-					}
-				}
-			}
+			include: krsDetailInclude
 		});
 
 		if (!krs) {
 			return apiError(404, 'KRS not found');
 		}
 
-		// Calculate total SKS
-		const totalSks = krs.details.reduce((sum: number, d: any) => sum + d.mataKuliah.sks, 0);
+		const totalSks = krs.details.reduce((sum: number, detail: any) => sum + detail.mataKuliah.sks, 0);
 
 		return apiOk({
 			...krs,
@@ -40,24 +48,40 @@ export const GET: RequestHandler = async ({ params }) => {
 	}
 };
 
-// PUT /api/krs/[id] - Update KRS status
+// PUT /api/krs/[id] - Reset rejected KRS back to DRAFT
 export const PUT: RequestHandler = async ({ params, request }) => {
 	try {
 		const id = parseIdParam(params.id);
 		const data = validateKRSUpdate(await readRequestBody(request));
 
+		if (data.tanggalSubmit !== undefined) {
+			return apiError(400, 'tanggalSubmit is managed automatically by workflow endpoints');
+		}
+
+		if (data.status !== 'DRAFT') {
+			return apiError(400, 'Only resetting a KRS back to DRAFT is allowed via this endpoint');
+		}
+
+		const currentKrs = await prisma.kRS.findUnique({
+			where: { id },
+			select: { status: true }
+		});
+
+		if (!currentKrs) {
+			return apiError(404, 'KRS not found');
+		}
+
+		if (currentKrs.status !== 'REJECTED' && currentKrs.status !== 'DRAFT') {
+			return apiError(400, 'Only REJECTED KRS can be reset to DRAFT');
+		}
+
 		const krs = await prisma.kRS.update({
 			where: { id },
-			data,
-			include: {
-				mahasiswa: { select: { id: true, nim: true, nama: true } },
-				semester: { select: { id: true, tahunAjaran: true, semester: true } },
-				details: {
-					include: {
-						mataKuliah: { select: { id: true, kode: true, nama: true, sks: true } }
-					}
-				}
-			}
+			data: {
+				status: 'DRAFT',
+				tanggalSubmit: null
+			},
+			include: krsDetailInclude
 		});
 
 		return apiOk(krs);

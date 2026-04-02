@@ -1,6 +1,7 @@
+import { Prisma } from '@prisma/client';
 import type { RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
-import { apiError, apiOk, handleApiError, parseIdParam, readRequestBody } from '$lib/server/http';
+import { apiOk, handleApiError, httpError, parseIdParam, readRequestBody } from '$lib/server/http';
 import { validateKrsCourseMutation } from '$lib/server/validation';
 
 // POST /api/krs/[id]/add-course - Add course to KRS
@@ -9,65 +10,72 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		const id = parseIdParam(params.id, 'KRS ID');
 		const { mataKuliahId } = validateKrsCourseMutation(await readRequestBody(request));
 
-		// Check if KRS exists and is in DRAFT status
-		const krs = await prisma.kRS.findUnique({
-			where: { id },
-			include: {
-				details: {
-					include: {
-						mataKuliah: { select: { sks: true } }
+		const detail = await prisma.$transaction(
+			async (tx) => {
+				const [krs, mataKuliah] = await Promise.all([
+					tx.kRS.findUnique({
+						where: { id },
+						include: {
+							mahasiswa: { select: { programStudiId: true } },
+							details: {
+								include: {
+									mataKuliah: { select: { sks: true } }
+								}
+							}
+						}
+					}),
+					tx.mataKuliah.findUnique({
+						where: { id: mataKuliahId },
+						select: { id: true, kode: true, nama: true, sks: true, programStudiId: true }
+					})
+				]);
+
+				if (!krs) {
+					httpError(404, 'KRS not found');
+				}
+
+				if (krs.status !== 'DRAFT') {
+					httpError(400, 'Can only add courses to DRAFT KRS');
+				}
+
+				if (!mataKuliah) {
+					httpError(404, 'Mata kuliah not found');
+				}
+
+				if (mataKuliah.programStudiId !== krs.mahasiswa.programStudiId) {
+					httpError(400, 'Course does not belong to the student study program');
+				}
+
+				const existingDetail = await tx.kRSDetail.findUnique({
+					where: {
+						krsId_mataKuliahId: {
+							krsId: id,
+							mataKuliahId
+						}
 					}
+				});
+
+				if (existingDetail) {
+					httpError(400, 'Course already exists in KRS');
 				}
-			}
-		});
 
-		if (!krs) {
-			return apiError(404, 'KRS not found');
-		}
-
-		if (krs.status !== 'DRAFT') {
-			return apiError(400, 'Can only add courses to DRAFT KRS');
-		}
-
-		// Check if course already exists in KRS
-		const existingDetail = await prisma.kRSDetail.findUnique({
-			where: {
-				krsId_mataKuliahId: {
-					krsId: id,
-					mataKuliahId
+				const currentSks = krs.details.reduce((sum: number, item: any) => sum + item.mataKuliah.sks, 0);
+				if (currentSks + mataKuliah.sks > 24) {
+					httpError(400, `Maximum SKS limit (24) exceeded. Current: ${currentSks}, Adding: ${mataKuliah.sks}`);
 				}
-			}
-		});
 
-		if (existingDetail) {
-			return apiError(400, 'Course already exists in KRS');
-		}
-
-		// Get mata kuliah to check SKS
-		const mataKuliah = await prisma.mataKuliah.findUnique({
-			where: { id: mataKuliahId }
-		});
-
-		if (!mataKuliah) {
-			return apiError(404, 'Mata kuliah not found');
-		}
-
-		// Check max SKS limit (24 SKS)
-		const currentSks = krs.details.reduce((sum: number, d: any) => sum + d.mataKuliah.sks, 0);
-		if (currentSks + mataKuliah.sks > 24) {
-			return apiError(400, `Maximum SKS limit (24) exceeded. Current: ${currentSks}, Adding: ${mataKuliah.sks}`);
-		}
-
-		// Add course to KRS
-		const detail = await prisma.kRSDetail.create({
-			data: {
-				krsId: id,
-				mataKuliahId
+				return tx.kRSDetail.create({
+					data: {
+						krsId: id,
+						mataKuliahId
+					},
+					include: {
+						mataKuliah: { select: { id: true, kode: true, nama: true, sks: true } }
+					}
+				});
 			},
-			include: {
-				mataKuliah: { select: { id: true, kode: true, nama: true, sks: true } }
-			}
-		});
+			{ isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+		);
 
 		return apiOk(detail, 201);
 	} catch (error) {

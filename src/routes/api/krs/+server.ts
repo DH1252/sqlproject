@@ -1,24 +1,38 @@
-import type { RequestHandler } from '@sveltejs/kit';
-import { prisma } from '$lib/server/prisma';
-import { StatusKRS } from '$lib/types';
+import type { RequestHandler } from "@sveltejs/kit";
 import {
 	apiList,
 	apiOk,
 	handleApiError,
+	parseOptionalBoolean,
 	parseOptionalEnum,
 	parseOptionalPositiveInt,
 	parsePagination,
-	readRequestBody
-} from '$lib/server/http';
-import { validateKRSCreate } from '$lib/server/validation';
+	readRequestBody,
+} from "$lib/server/http";
+import { prisma } from "$lib/server/prisma";
+import { validateKRSCreate } from "$lib/server/validation";
+import { StatusKRS } from "$lib/types";
 
 // GET /api/krs - List all KRS
 export const GET: RequestHandler = async ({ url }) => {
 	try {
 		const { page, limit, skip } = parsePagination(url);
-		const mahasiswaId = parseOptionalPositiveInt(url.searchParams.get('mahasiswaId'), 'mahasiswaId');
-		const semesterId = parseOptionalPositiveInt(url.searchParams.get('semesterId'), 'semesterId');
-		const status = parseOptionalEnum(url.searchParams.get('status'), 'status', Object.values(StatusKRS));
+		const mahasiswaId = parseOptionalPositiveInt(
+			url.searchParams.get("mahasiswaId"),
+			"mahasiswaId",
+		);
+		const semesterId = parseOptionalPositiveInt(
+			url.searchParams.get("semesterId"),
+			"semesterId",
+		);
+		const status = parseOptionalEnum(
+			url.searchParams.get("status"),
+			"status",
+			Object.values(StatusKRS),
+		);
+		const includeDetails =
+			parseOptionalBoolean(url.searchParams.get("includeDetails"), "includeDetails") ??
+			true;
 
 		const where: any = {};
 
@@ -41,35 +55,51 @@ export const GET: RequestHandler = async ({ url }) => {
 				take: limit,
 				include: {
 					mahasiswa: {
-						select: { id: true, nim: true, nama: true },
-						include: { programStudi: { select: { id: true, kode: true, nama: true } } }
+						select: {
+							id: true,
+							nim: true,
+							nama: true,
+						},
 					},
 					semester: { select: { id: true, tahunAjaran: true, semester: true } },
-					details: {
-						include: {
-							mataKuliah: { select: { id: true, kode: true, nama: true, sks: true } }
-						}
-					}
+					...(includeDetails && {
+						details: {
+							include: {
+								mataKuliah: {
+									select: { id: true, kode: true, nama: true, sks: true },
+								},
+							},
+						},
+					}),
 				},
-				orderBy: { createdAt: 'desc' }
+				orderBy: { createdAt: "desc" },
 			}),
-			prisma.kRS.count({ where })
+			prisma.kRS.count({ where }),
 		]);
 
-		// Calculate total SKS for each KRS
-		const krsWithTotalSks = krs.map((k: any) => ({
-			...k,
-			totalSks: k.details.reduce((sum: number, d: any) => sum + d.mataKuliah.sks, 0)
-		}));
+		const responseData = includeDetails
+			? krs.map((k: any) => ({
+				...k,
+				totalSks: k.details.reduce(
+					(sum: number, d: any) => sum + d.mataKuliah.sks,
+					0,
+				),
+			}))
+			: krs;
 
-		return apiList(krsWithTotalSks, {
+		return apiList(responseData, {
 			page,
 			limit,
 			total,
-			totalPages: Math.ceil(total / limit)
+			totalPages: Math.ceil(total / limit),
 		});
 	} catch (error) {
-		return handleApiError(error, 'Error fetching KRS:', {}, 'Failed to fetch KRS');
+		return handleApiError(
+			error,
+			"Error fetching KRS:",
+			{},
+			"Failed to fetch KRS",
+		);
 	}
 };
 
@@ -81,24 +111,24 @@ export const POST: RequestHandler = async ({ request }) => {
 		const krs = await prisma.kRS.create({
 			data: {
 				...data,
-				status: 'DRAFT'
+				status: "DRAFT",
 			},
 			include: {
 				mahasiswa: { select: { id: true, nim: true, nama: true } },
-				semester: { select: { id: true, tahunAjaran: true, semester: true } }
-			}
+				semester: { select: { id: true, tahunAjaran: true, semester: true } },
+			},
 		});
 
 		return apiOk(krs, 201);
 	} catch (error) {
 		return handleApiError(
 			error,
-			'Error creating KRS:',
+			"Error creating KRS:",
 			{
-				P2002: 'KRS already exists for this student and semester',
-				P2003: 'KRS references a mahasiswa or semester that does not exist'
+				P2002: "KRS already exists for this student and semester",
+				P2003: "KRS references a mahasiswa or semester that does not exist",
 			},
-			'Failed to create KRS'
+			"Failed to create KRS",
 		);
 	}
 };

@@ -1,41 +1,50 @@
+import { Prisma } from '@prisma/client';
 import type { RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
-import { apiError, apiOk, handleApiError, parseIdParam } from '$lib/server/http';
+import { apiOk, handleApiError, httpError, parseIdParam } from '$lib/server/http';
+
+const approvalInclude = {
+	mahasiswa: { select: { id: true, nim: true, nama: true } },
+	semester: { select: { id: true, tahunAjaran: true, semester: true } },
+	details: {
+		include: {
+			mataKuliah: { select: { id: true, kode: true, nama: true, sks: true } }
+		}
+	}
+} as const;
 
 // PUT /api/krs/[id]/approve - Approve KRS
 export const PUT: RequestHandler = async ({ params }) => {
 	try {
 		const id = parseIdParam(params.id, 'KRS ID');
 
-		// Check if KRS exists and is in SUBMITTED status
-		const krs = await prisma.kRS.findUnique({
-			where: { id }
-		});
+		const updatedKrs = await prisma.$transaction(
+			async (tx) => {
+				const krs = await tx.kRS.findUnique({
+					where: { id },
+					select: { status: true }
+				});
 
-		if (!krs) {
-			return apiError(404, 'KRS not found');
-		}
-
-		if (krs.status !== 'SUBMITTED') {
-			return apiError(400, 'Can only approve SUBMITTED KRS');
-		}
-
-		// Update KRS status
-		const updatedKrs = await prisma.kRS.update({
-			where: { id },
-			data: {
-				status: 'APPROVED'
-			},
-			include: {
-				mahasiswa: { select: { id: true, nim: true, nama: true } },
-				semester: { select: { id: true, tahunAjaran: true, semester: true } },
-				details: {
-					include: {
-						mataKuliah: { select: { id: true, kode: true, nama: true, sks: true } }
-					}
+				if (!krs) {
+					httpError(404, 'KRS not found');
 				}
-			}
-		});
+
+				if (krs.status !== 'SUBMITTED') {
+					httpError(400, 'Can only approve SUBMITTED KRS');
+				}
+
+				await tx.kRS.update({
+					where: { id },
+					data: { status: 'APPROVED' }
+				});
+
+				return tx.kRS.findUniqueOrThrow({
+					where: { id },
+					include: approvalInclude
+				});
+			},
+			{ isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+		);
 
 		return apiOk(updatedKrs);
 	} catch (error) {

@@ -62,10 +62,14 @@
 		formLoading = true;
 		try {
 			if (editingData) {
-				const response = await nilaiService.update(editingData.id, formData);
+				const response = await nilaiService.update(editingData.id, {
+					nilaiTugas: formData.nilaiTugas,
+					nilaiUTS: formData.nilaiUTS,
+					nilaiUAS: formData.nilaiUAS
+				});
 				if (response.success) {
 					isModalOpen = false;
-					loadData();
+					await loadData();
 				} else {
 					alert(response.error || 'Perubahan belum berhasil disimpan.');
 				}
@@ -73,7 +77,7 @@
 				const response = await nilaiService.create(formData);
 				if (response.success) {
 					isModalOpen = false;
-					loadData();
+					await loadData();
 				} else {
 					alert(response.error || 'Data baru belum berhasil disimpan.');
 				}
@@ -92,7 +96,7 @@
 		try {
 			const response = await nilaiService.delete(item.id);
 			if (response.success) {
-				loadData();
+				await loadData();
 			} else {
 				alert(response.error || 'Data belum berhasil dihapus.');
 			}

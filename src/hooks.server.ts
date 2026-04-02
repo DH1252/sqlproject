@@ -18,6 +18,10 @@ const authPassword = process.env.BASIC_AUTH_PASSWORD;
 const authConfigured = Boolean(authUsername && authPassword);
 const authRequired = process.env.NODE_ENV === 'production' || authConfigured;
 
+if (authRequired && !authConfigured) {
+	throw new Error('BASIC_AUTH_USERNAME and BASIC_AUTH_PASSWORD must be configured when authentication is required');
+}
+
 function safeEqual(left: string, right: string) {
 	const leftBuffer = Buffer.from(left);
 	const rightBuffer = Buffer.from(right);
@@ -27,7 +31,8 @@ function safeEqual(left: string, right: string) {
 
 function unauthorizedResponse(isApiRequest: boolean) {
 	const headers = {
-		'WWW-Authenticate': 'Basic realm="Academic System"'
+		'WWW-Authenticate': 'Basic realm="Academic System", charset="UTF-8"',
+		'Cache-Control': 'no-store'
 	};
 
 	if (isApiRequest) {
@@ -51,10 +56,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.auth = null;
 
 	if (authRequired) {
-		if (!authConfigured) {
-			return new Response('Server authentication is not configured', { status: 500 });
-		}
-
 		const authorization = event.request.headers.get('authorization');
 		const isApiRequest = event.url.pathname.startsWith('/api');
 

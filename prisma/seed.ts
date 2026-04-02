@@ -11,7 +11,6 @@ async function main() {
 	await prisma.enrollment.deleteMany();
 	await prisma.jadwalRuangan.deleteMany();
 	await prisma.jadwal.deleteMany();
-	await prisma.nilai.deleteMany();
 	await prisma.mataKuliah.deleteMany();
 	await prisma.ruangKelas.deleteMany();
 	await prisma.dosen.deleteMany();
@@ -39,7 +38,7 @@ async function main() {
 	// 2. Create Semester
 	const semester = await Promise.all([
 		prisma.semester.create({
-			data: { tahunAjaran: '2024/2025', semester: JenisSemester.GANJIL, isActive: true }
+			data: { tahunAjaran: '2024/2025', semester: JenisSemester.GANJIL, isActive: true, activeKey: 'ACTIVE' }
 		}),
 		prisma.semester.create({
 			data: { tahunAjaran: '2024/2025', semester: JenisSemester.GENAP, isActive: false }

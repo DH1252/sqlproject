@@ -2,6 +2,9 @@ import { Prisma } from '@prisma/client';
 import { json } from '@sveltejs/kit';
 import type { PaginationInfo } from '$lib/types';
 
+const POSITIVE_INT_REGEX = /^[1-9]\d*$/;
+const MAX_JSON_BODY_BYTES = 1024 * 1024;
+
 export class ApiHttpError extends Error {
 	constructor(
 		public readonly status: number,
@@ -35,28 +38,26 @@ export function apiError(status: number, message: string) {
 	return json({ success: false, error: message }, { status });
 }
 
-export function parseIdParam(value: string | undefined, label = 'ID'): number {
-	const parsed = Number(value);
+function parsePositiveIntegerString(value: string | undefined | null, label: string) {
+	const normalized = value?.trim();
 
-	if (!Number.isInteger(parsed) || parsed < 1) {
+	if (!normalized || !POSITIVE_INT_REGEX.test(normalized)) {
 		httpError(400, `Invalid ${label}`);
 	}
 
-	return parsed;
+	return Number(normalized);
+}
+
+export function parseIdParam(value: string | undefined, label = 'ID'): number {
+	return parsePositiveIntegerString(value, label);
 }
 
 export function parseOptionalPositiveInt(value: string | null | undefined, label: string): number | undefined {
-	if (value === null || value === undefined || value === '') {
+	if (value === null || value === undefined || value.trim() === '') {
 		return undefined;
 	}
 
-	const parsed = Number(value);
-
-	if (!Number.isInteger(parsed) || parsed < 1) {
-		httpError(400, `Invalid ${label}`);
-	}
-
-	return parsed;
+	return parsePositiveIntegerString(value, label);
 }
 
 export function parseOptionalBoolean(value: string | null | undefined, label: string): boolean | undefined {
@@ -112,7 +113,31 @@ export function parsePagination(
 	};
 }
 
+function assertJsonRequest(request: Request) {
+	const contentType = request.headers.get('content-type')?.toLowerCase() ?? '';
+
+	if (!contentType.includes('application/json')) {
+		httpError(415, 'Content-Type must be application/json');
+	}
+
+	const contentLengthHeader = request.headers.get('content-length');
+
+	if (contentLengthHeader) {
+		const contentLength = Number(contentLengthHeader);
+
+		if (!Number.isFinite(contentLength) || contentLength < 0) {
+			httpError(400, 'Invalid Content-Length header');
+		}
+
+		if (contentLength > MAX_JSON_BODY_BYTES) {
+			httpError(413, 'Request body is too large');
+		}
+	}
+}
+
 export async function readRequestBody(request: Request): Promise<Record<string, unknown>> {
+	assertJsonRequest(request);
+
 	let payload: unknown;
 
 	try {
@@ -169,6 +194,19 @@ function defaultMessageForPrismaCode(code: string): string {
 	}
 }
 
+function logUnexpectedError(logLabel: string, error: unknown) {
+	if (error instanceof Error) {
+		console.error(logLabel, {
+			name: error.name,
+			message: error.message,
+			...(process.env.NODE_ENV !== 'production' && { stack: error.stack })
+		});
+		return;
+	}
+
+	console.error(logLabel, { error });
+}
+
 export function handleApiError(
 	error: unknown,
 	logLabel: string,
@@ -180,13 +218,16 @@ export function handleApiError(
 	}
 
 	if (isPrismaKnownError(error)) {
-		console.error(logLabel, error);
+		console.error(logLabel, {
+			code: error.code,
+			...(process.env.NODE_ENV !== 'production' && { message: error.message })
+		});
 		return apiError(
 			statusForPrismaCode(error.code),
 			overrides[error.code] ?? defaultMessageForPrismaCode(error.code)
 		);
 	}
 
-	console.error(logLabel, error);
+	logUnexpectedError(logLabel, error);
 	return apiError(500, fallbackMessage);
 }

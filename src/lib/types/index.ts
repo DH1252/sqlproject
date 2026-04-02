@@ -374,15 +374,19 @@ export interface EnrollmentFilter extends ListQueryParams {
 	dosenId?: number;
 	semesterId?: number;
 	status?: StatusEnrollment;
+	includeSemester?: boolean;
+	includeNilai?: boolean;
 }
 
 export interface NilaiFilter extends ListQueryParams {
 	semesterId?: number;
 	mahasiswaId?: number;
+	includeSemester?: boolean;
 }
 
 export interface KRSFilter extends ListQueryParams {
 	mahasiswaId?: number;
 	semesterId?: number;
 	status?: StatusKRS;
+	includeDetails?: boolean;
 }

@@ -1,6 +1,7 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
-import { apiList, apiOk, handleApiError, parseOptionalBoolean, parsePagination, readRequestBody } from '$lib/server/http';
+import { ACTIVE_SEMESTER_KEY, semesterSelect } from '$lib/server/semester';
+import { apiList, apiOk, handleApiError, httpError, parseOptionalBoolean, parsePagination, readRequestBody } from '$lib/server/http';
 import { validateSemesterCreate } from '$lib/server/validation';
 
 // GET /api/semester - List all semesters
@@ -20,6 +21,7 @@ export const GET: RequestHandler = async ({ url }) => {
 				where,
 				skip,
 				take: limit,
+				select: semesterSelect,
 				orderBy: [{ tahunAjaran: 'desc' }, { semester: 'desc' }]
 			}),
 			prisma.semester.count({ where })
@@ -41,23 +43,35 @@ export const POST: RequestHandler = async ({ request }) => {
 	try {
 		const data = validateSemesterCreate(await readRequestBody(request));
 
-		const newSemester = data.isActive
-			? await prisma.$transaction(async (tx) => {
-					await tx.semester.updateMany({
-						where: { isActive: true },
-						data: { isActive: false }
-					});
+		const newSemester = await prisma.$transaction(async (tx) => {
+			const activeCount = await tx.semester.count({ where: { activeKey: ACTIVE_SEMESTER_KEY } });
 
-					return tx.semester.create({ data });
-				})
-			: await prisma.semester.create({ data });
+			if (activeCount === 0 && !data.isActive) {
+				httpError(400, 'The first semester must be created as active');
+			}
+
+			if (data.isActive) {
+				await tx.semester.updateMany({
+					where: { activeKey: ACTIVE_SEMESTER_KEY },
+					data: { isActive: false, activeKey: null }
+				});
+			}
+
+			return tx.semester.create({
+				data: {
+					...data,
+					activeKey: data.isActive ? ACTIVE_SEMESTER_KEY : null
+				},
+				select: semesterSelect
+			});
+		});
 
 		return apiOk(newSemester, 201);
 	} catch (error) {
 		return handleApiError(
 			error,
 			'Error creating semester:',
-			{ P2002: 'Semester already exists for this tahun ajaran' },
+			{ P2002: 'Semester already exists for this tahun ajaran or another active semester already exists' },
 			'Failed to create semester'
 		);
 	}

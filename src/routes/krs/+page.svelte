@@ -4,6 +4,7 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import KRSForm from '$lib/components/forms/KRSForm.svelte';
 	import { krsService } from '$lib/api/services/krs';
+	import { StatusKRS } from '$lib/types';
 	import type { KRS, KRSFormData } from '$lib/types';
 
 	let data = $state<KRS[]>([]);
@@ -63,10 +64,12 @@
 		formLoading = true;
 		try {
 			if (editingData) {
-				const response = await krsService.update(editingData.id, formData);
+				const response = await krsService.update(editingData.id, {
+					status: StatusKRS.DRAFT
+				});
 				if (response.success) {
 					isModalOpen = false;
-					loadData();
+					await loadData();
 				} else {
 					alert(response.error || 'Perubahan belum berhasil disimpan.');
 				}
@@ -74,7 +77,7 @@
 				const response = await krsService.create(formData);
 				if (response.success) {
 					isModalOpen = false;
-					loadData();
+					await loadData();
 				} else {
 					alert(response.error || 'Data baru belum berhasil disimpan.');
 				}
@@ -93,7 +96,7 @@
 		try {
 			const response = await krsService.delete(item.id);
 			if (response.success) {
-				loadData();
+				await loadData();
 			} else {
 				alert(response.error || 'Data belum berhasil dihapus.');
 			}
@@ -115,22 +118,17 @@
 		
 		actionLoading = { id: item.id, action };
 		try {
-			let response;
-			switch (action) {
-				case 'submit':
-					response = await krsService.submit(item.id);
-					break;
-				case 'approve':
-					response = await krsService.approve(item.id);
-					break;
-				case 'reject':
-					response = await krsService.reject(item.id);
-					break;
-			}
-			if (response!.success) {
-				loadData();
+			const response =
+				action === 'submit'
+					? await krsService.submit(item.id)
+					: action === 'approve'
+						? await krsService.approve(item.id)
+						: await krsService.reject(item.id);
+
+			if (response.success) {
+				await loadData();
 			} else {
-				alert(response!.error || 'Permintaan belum berhasil diproses.');
+				alert(response.error || 'Permintaan belum berhasil diproses.');
 			}
 		} catch (err) {
 			alert('Koneksi bermasalah. Coba lagi dalam beberapa saat.');
@@ -225,13 +223,16 @@
 							Tolak
 						{/if}
 					</button>
+				{:else if row.status === 'REJECTED'}
+					<button
+						class="btn btn-sm btn-warning"
+						onclick={() => openEdit(row)}
+						disabled={actionLoading?.id === row.id || deleteLoading === row.id}
+					>
+						Kembalikan
+					</button>
 				{/if}
-				<button class="btn btn-sm btn-ghost" aria-label="Ubah data" onclick={() => openEdit(row)} disabled={deleteLoading === row.id}>
-					<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-					</svg>
-				</button>
-				<button class="btn btn-sm btn-error btn-ghost" aria-label="Hapus data" onclick={() => handleDelete(row)} disabled={deleteLoading === row.id}>
+				<button class="btn btn-sm btn-error btn-ghost" aria-label="Hapus data" onclick={() => handleDelete(row)} disabled={deleteLoading === row.id || actionLoading?.id === row.id}>
 					{#if deleteLoading === row.id}
 						<span class="loading loading-spinner loading-xs"></span>
 					{:else}
@@ -247,9 +248,9 @@
 
 <Modal 
 	open={isModalOpen} 
-	title={editingData ? 'Edit KRS' : 'Buat KRS'}
+	title={editingData ? 'Kembalikan KRS ke Draft' : 'Buat KRS'}
 	onClose={() => isModalOpen = false}
-	size="md"
+	size={editingData ? 'sm' : 'md'}
 >
 	<KRSForm
 		data={editingData}

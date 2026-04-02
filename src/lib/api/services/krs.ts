@@ -18,7 +18,8 @@ export const krsService = {
 			limit: params.limit,
 			mahasiswaId: params.mahasiswaId,
 			semesterId: params.semesterId,
-			status: params.status
+			status: params.status,
+			includeDetails: params.includeDetails ?? false
 		});
 		return apiGetList<KRS>(`${ENDPOINT}${query}`);
 	},

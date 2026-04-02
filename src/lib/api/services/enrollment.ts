@@ -19,7 +19,9 @@ export const enrollmentService = {
 			mataKuliahId: params.mataKuliahId,
 			dosenId: params.dosenId,
 			semesterId: params.semesterId,
-			status: params.status
+			status: params.status,
+			includeSemester: params.includeSemester ?? false,
+			includeNilai: params.includeNilai ?? false
 		});
 		return apiGetList<Enrollment>(`${ENDPOINT}${query}`);
 	},

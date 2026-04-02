@@ -16,7 +16,8 @@ export const nilaiService = {
 			page: params.page,
 			limit: params.limit,
 			semesterId: params.semesterId,
-			mahasiswaId: params.mahasiswaId
+			mahasiswaId: params.mahasiswaId,
+			includeSemester: params.includeSemester ?? false
 		});
 		return apiGetList<Nilai>(`${ENDPOINT}${query}`);
 	},

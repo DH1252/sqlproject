@@ -36,9 +36,13 @@
 	let nilaiTotal = $derived(() => gradePreview()?.nilaiTotal?.toFixed(2) ?? '-');
 	let hurufMutu = $derived(() => gradePreview()?.hurufMutu ?? '-');
 
-		onMount(async () => {
+	onMount(async () => {
 		try {
-			const response = await enrollmentService.getAll({ limit: 100 });
+			const response = await enrollmentService.getAll({
+				limit: 100,
+				includeSemester: true,
+				includeNilai: true
+			});
 			if (response.success) {
 				enrollments = response.data.filter((enrollment: Enrollment) => !enrollment.nilai || enrollment.id === data?.enrollmentId);
 				if (!data && enrollments.length > 0) {
@@ -51,16 +55,20 @@
 	});
 
 	const fields = $derived([
-		{
-			name: 'enrollmentId',
-			label: 'Enrollment',
-			type: 'select' as const,
-			required: true,
-			options: enrollments.map(e => ({ 
-				value: e.id, 
-				label: `${e.mahasiswa?.nim} - ${e.mataKuliah?.nama} (${e.semester?.tahunAjaran})` 
-			}))
-		},
+		...(!data
+			? [
+				{
+					name: 'enrollmentId',
+					label: 'Enrollment',
+					type: 'select' as const,
+					required: true,
+					options: enrollments.map((enrollment) => ({
+						value: enrollment.id,
+						label: `${enrollment.mahasiswa?.nim} - ${enrollment.mahasiswa?.nama} - ${enrollment.mataKuliah?.nama} (${enrollment.semester?.tahunAjaran})`
+					}))
+				}
+			]
+			: []),
 		{
 			name: 'nilaiTugas',
 			label: 'Nilai Tugas (30%)',
@@ -88,6 +96,10 @@
 	]);
 
 	function handleSubmit() {
+		if (!data && enrollments.length === 0) {
+			return;
+		}
+
 		onSubmit(formData);
 	}
 </script>
@@ -98,6 +110,26 @@
 	</div>
 {:else}
 	<EntityForm {fields} bind:data={formData} {loading}>
+		{#if data}
+			<div class="rounded-lg border border-base-300 bg-base-200 p-4">
+				<p class="text-sm font-medium">Enrollment</p>
+				<p class="mt-2 text-sm font-medium text-base-content">
+					{data.enrollment?.mahasiswa?.nim} - {data.enrollment?.mahasiswa?.nama}
+				</p>
+				<p class="text-sm text-muted">
+					{data.enrollment?.mataKuliah?.kode} - {data.enrollment?.mataKuliah?.nama}
+					{#if data.enrollment?.semester}
+						 • {data.enrollment.semester.tahunAjaran} {data.enrollment.semester.semester}
+					{/if}
+				</p>
+				<p class="mt-2 text-xs text-muted">Enrollment tidak bisa diubah saat edit nilai.</p>
+			</div>
+		{:else if enrollments.length === 0}
+			<div class="alert alert-info">
+				<span>Semua enrollment sudah memiliki nilai. Hapus nilai lama atau buat enrollment baru terlebih dahulu.</span>
+			</div>
+		{/if}
+
 		<div class="bg-base-200 p-4 rounded-lg mt-4">
 			<div class="grid grid-cols-2 gap-4">
 				<div>
@@ -114,7 +146,12 @@
 			<button type="button" class="btn btn-ghost w-full sm:w-auto" onclick={onCancel} disabled={loading}>
 				Batal
 			</button>
-			<button type="button" class="btn btn-primary w-full sm:w-auto" onclick={handleSubmit} disabled={loading}>
+			<button
+				type="button"
+				class="btn btn-primary w-full sm:w-auto"
+				onclick={handleSubmit}
+				disabled={loading || (!data && enrollments.length === 0)}
+			>
 				{#if loading}
 					<span class="loading loading-spinner loading-sm"></span>
 				{/if}

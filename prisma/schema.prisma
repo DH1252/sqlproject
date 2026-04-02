@@ -149,6 +149,7 @@ model Semester {
   tahunAjaran String       @db.VarChar(20) // e.g., 2024/2025
   semester    JenisSemester
   isActive    Boolean      @default(false)
+  activeKey   String?      @unique @db.VarChar(16)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -220,6 +221,10 @@ model Enrollment {
   semester   Semester   @relation(fields: [semesterId], references: [id])
   nilai      Nilai?
 
+  @@index([mahasiswaId, semesterId, status])
+  @@index([ruangKelasId, semesterId, status])
+  @@index([mataKuliahId, dosenId, ruangKelasId, jadwalId, semesterId, status])
+  @@index([semesterId, status, createdAt])
   @@unique([mahasiswaId, mataKuliahId, semesterId])
   @@map("enrollment")
 }
@@ -268,6 +273,8 @@ model KRS {
   semester  Semester   @relation(fields: [semesterId], references: [id])
   details   KRSDetail[]
 
+  @@index([mahasiswaId, semesterId, status])
+  @@index([semesterId, status, createdAt])
   @@unique([mahasiswaId, semesterId])
   @@map("krs")
 }

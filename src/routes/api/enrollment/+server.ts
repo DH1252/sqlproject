@@ -1,17 +1,28 @@
+import { Prisma } from '@prisma/client';
 import type { RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
+import { validateEnrollmentConflicts } from '$lib/server/enrollment';
 import { StatusEnrollment } from '$lib/types';
 import {
-	apiError,
 	apiList,
 	apiOk,
 	handleApiError,
+	httpError,
+	parseOptionalBoolean,
 	parseOptionalEnum,
 	parseOptionalPositiveInt,
 	parsePagination,
 	readRequestBody
 } from '$lib/server/http';
 import { validateEnrollmentCreate } from '$lib/server/validation';
+
+const enrollmentInclude = {
+	mahasiswa: { select: { id: true, nim: true, nama: true } },
+	mataKuliah: { select: { id: true, kode: true, nama: true, sks: true } },
+	dosen: { select: { id: true, nip: true, nama: true } },
+	ruangKelas: { select: { id: true, kode: true, nama: true } },
+	jadwal: { select: { id: true, hari: true, jamMulai: true, jamSelesai: true } }
+} as const;
 
 // GET /api/enrollment - List all enrollments
 export const GET: RequestHandler = async ({ url }) => {
@@ -22,6 +33,8 @@ export const GET: RequestHandler = async ({ url }) => {
 		const dosenId = parseOptionalPositiveInt(url.searchParams.get('dosenId'), 'dosenId');
 		const semesterId = parseOptionalPositiveInt(url.searchParams.get('semesterId'), 'semesterId');
 		const status = parseOptionalEnum(url.searchParams.get('status'), 'status', Object.values(StatusEnrollment));
+		const includeSemester = parseOptionalBoolean(url.searchParams.get('includeSemester'), 'includeSemester') ?? true;
+		const includeNilai = parseOptionalBoolean(url.searchParams.get('includeNilai'), 'includeNilai') ?? true;
 
 		const where: any = {};
 
@@ -51,13 +64,11 @@ export const GET: RequestHandler = async ({ url }) => {
 				skip,
 				take: limit,
 				include: {
-					mahasiswa: { select: { id: true, nim: true, nama: true } },
-					mataKuliah: { select: { id: true, kode: true, nama: true, sks: true } },
-					dosen: { select: { id: true, nip: true, nama: true } },
-					ruangKelas: { select: { id: true, kode: true, nama: true } },
-					jadwal: { select: { id: true, hari: true, jamMulai: true, jamSelesai: true } },
-					semester: { select: { id: true, tahunAjaran: true, semester: true } },
-					nilai: true
+					...enrollmentInclude,
+					...(includeSemester && {
+						semester: { select: { id: true, tahunAjaran: true, semester: true } }
+					}),
+					...(includeNilai && { nilai: true })
 				},
 				orderBy: { createdAt: 'desc' }
 			}),
@@ -80,45 +91,48 @@ export const POST: RequestHandler = async ({ request }) => {
 	try {
 		const data = validateEnrollmentCreate(await readRequestBody(request));
 
-		// Check for schedule conflict for the student
-		const existingEnrollment = await prisma.enrollment.findFirst({
-			where: {
-				mahasiswaId: data.mahasiswaId,
-				jadwalId: data.jadwalId,
-				semesterId: data.semesterId,
-				status: { not: 'DROPPED' }
-			}
-		});
+		const enrollment = await prisma.$transaction(
+			async (tx) => {
+				const existingEnrollment = await tx.enrollment.findUnique({
+					where: {
+						mahasiswaId_mataKuliahId_semesterId: {
+							mahasiswaId: data.mahasiswaId,
+							mataKuliahId: data.mataKuliahId,
+							semesterId: data.semesterId
+						}
+					},
+					select: { id: true, status: true }
+				});
 
-		if (existingEnrollment) {
-			return apiError(400, 'Schedule conflict: Student already has a class at this time');
-		}
+				if (existingEnrollment && existingEnrollment.status !== 'DROPPED') {
+					httpError(409, 'Student is already enrolled in this course for this semester');
+				}
 
-		// Check for room conflict
-		const roomConflict = await prisma.enrollment.findFirst({
-			where: {
-				ruangKelasId: data.ruangKelasId,
-				jadwalId: data.jadwalId,
-				semesterId: data.semesterId,
-				status: { not: 'DROPPED' }
-			}
-		});
+				await validateEnrollmentConflicts(tx, data, {
+					excludeEnrollmentId: existingEnrollment?.status === 'DROPPED' ? existingEnrollment.id : undefined
+				});
 
-		if (roomConflict) {
-			return apiError(400, 'Room conflict: Room is already booked at this time');
-		}
+				if (existingEnrollment?.status === 'DROPPED') {
+					return tx.enrollment.update({
+						where: { id: existingEnrollment.id },
+						data,
+						include: {
+							...enrollmentInclude,
+							semester: { select: { id: true, tahunAjaran: true, semester: true } }
+						}
+					});
+				}
 
-		const enrollment = await prisma.enrollment.create({
-			data,
-			include: {
-				mahasiswa: { select: { id: true, nim: true, nama: true } },
-				mataKuliah: { select: { id: true, kode: true, nama: true, sks: true } },
-				dosen: { select: { id: true, nip: true, nama: true } },
-				ruangKelas: { select: { id: true, kode: true, nama: true } },
-				jadwal: { select: { id: true, hari: true, jamMulai: true, jamSelesai: true } },
-				semester: { select: { id: true, tahunAjaran: true, semester: true } }
-			}
-		});
+				return tx.enrollment.create({
+					data,
+					include: {
+						...enrollmentInclude,
+						semester: { select: { id: true, tahunAjaran: true, semester: true } }
+					}
+				});
+			},
+			{ isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+		);
 
 		return apiOk(enrollment, 201);
 	} catch (error) {

@@ -21,6 +21,7 @@ import { httpError, requireFields } from '$lib/server/http';
 
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 const ACADEMIC_YEAR_REGEX = /^(\d{4})\/(\d{4})$/;
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:Z|[+-]\d{2}:\d{2}))?$/;
 const JENJANG_VALUES = ['S1', 'S2', 'S3'] as const;
 
 function stringField(
@@ -250,6 +251,10 @@ function optionalDateField(value: unknown, name: string) {
 
 	if (typeof value !== 'string') {
 		httpError(400, `${name} must be an ISO date string or null`);
+	}
+
+	if (!ISO_DATE_REGEX.test(value)) {
+		httpError(400, `${name} must be a valid ISO date string`);
 	}
 
 	const parsed = new Date(value);

@@ -24,7 +24,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 							mataKuliah: { select: { id: true, kode: true, nama: true, sks: true } },
 							dosen: { select: { id: true, nip: true, nama: true } },
 							semester: { select: { id: true, tahunAjaran: true, semester: true } },
-							nilai: true
+							...(includeNilai && { nilai: true })
 						}
 					}
 				})
@@ -35,19 +35,18 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			return apiError(404, 'Mahasiswa not found');
 		}
 
-		// Calculate IPK if requested
 		let ipkData = null;
 		if (includeNilai && mahasiswa.enrollments) {
 			const completedEnrollments = mahasiswa.enrollments.filter(
-				(e: any) => e.status === 'COMPLETED' && e.nilai?.hurufMutu
+				(enrollment: any) => enrollment.status === 'COMPLETED' && enrollment.nilai?.hurufMutu
 			);
-			const grades = completedEnrollments.map((e: any) => ({
-				hurufMutu: e.nilai.hurufMutu,
-				sks: e.mataKuliah.sks
+			const grades = completedEnrollments.map((enrollment: any) => ({
+				hurufMutu: enrollment.nilai.hurufMutu,
+				sks: enrollment.mataKuliah.sks
 			}));
 			ipkData = {
 				ipk: calculateGPA(grades),
-				totalSks: grades.reduce((sum: number, g: any) => sum + g.sks, 0),
+				totalSks: grades.reduce((sum: number, grade: any) => sum + grade.sks, 0),
 				totalCourses: completedEnrollments.length
 			};
 		}
