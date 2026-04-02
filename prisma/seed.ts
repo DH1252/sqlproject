@@ -1,6 +1,5 @@
-import { PrismaClient, TipeRuangKelas, JenisSemester, Hari, StatusMahasiswa, StatusEnrollment, StatusKRS, StatusRuangKelas } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { TipeRuangKelas, JenisSemester, Hari, StatusMahasiswa, StatusEnrollment, StatusKRS, StatusRuangKelas } from '@prisma/client';
+import prisma from '../src/lib/server/prisma';
 
 async function main() {
 	console.log('Starting seed...');
