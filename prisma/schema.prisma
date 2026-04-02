@@ -1,0 +1,310 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ============================================
+// Study Program
+// ============================================
+model ProgramStudi {
+  id        Int       @id @default(autoincrement())
+  kode      String    @unique @db.VarChar(20)
+  nama      String    @db.VarChar(100)
+  jenjang   String    @db.VarChar(10) // S1, S2, S3
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relations
+  mahasiswa Mahasiswa[]
+  dosen     Dosen[]
+  mataKuliah MataKuliah[]
+
+  @@map("program_studi")
+}
+
+// ============================================
+// Student
+// ============================================
+enum StatusMahasiswa {
+  ACTIVE
+  INACTIVE
+  GRADUATED
+}
+
+model Mahasiswa {
+  id             Int             @id @default(autoincrement())
+  nim            String          @unique @db.VarChar(20)
+  nama           String          @db.VarChar(100)
+  email          String          @unique @db.VarChar(100)
+  programStudiId Int
+  angkatan       Int
+  status         StatusMahasiswa @default(ACTIVE)
+  ipk            Float           @default(0.0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  // Relations
+  programStudi ProgramStudi @relation(fields: [programStudiId], references: [id])
+  enrollments  Enrollment[]
+  krs          KRS[]
+
+  @@map("mahasiswa")
+}
+
+// ============================================
+// Lecturer
+// ============================================
+model Dosen {
+  id             Int      @id @default(autoincrement())
+  nip            String   @unique @db.VarChar(20)
+  nama           String   @db.VarChar(100)
+  email          String   @unique @db.VarChar(100)
+  programStudiId Int
+  jabatan        String   @db.VarChar(50)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  programStudi ProgramStudi @relation(fields: [programStudiId], references: [id])
+  enrollments  Enrollment[]
+
+  @@map("dosen")
+}
+
+// ============================================
+// Course
+// ============================================
+model MataKuliah {
+  id             Int       @id @default(autoincrement())
+  kode           String    @unique @db.VarChar(20)
+  nama           String    @db.VarChar(100)
+  sks            Int
+  semester       Int       // Recommended semester
+  programStudiId Int
+  deskripsi      String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  programStudi ProgramStudi @relation(fields: [programStudiId], references: [id])
+  enrollments  Enrollment[]
+  krsDetails   KRSDetail[]
+
+  @@map("mata_kuliah")
+}
+
+// ============================================
+// Classroom
+// ============================================
+enum TipeRuangKelas {
+  REGULER
+  LAB_KOMPUTER
+  LAB_BAHASA
+  AUDITORIUM
+}
+
+enum StatusRuangKelas {
+  AVAILABLE
+  MAINTENANCE
+  UNAVAILABLE
+}
+
+model RuangKelas {
+  id           Int              @id @default(autoincrement())
+  kode         String           @unique @db.VarChar(20)
+  nama         String           @db.VarChar(100)
+  tipe         TipeRuangKelas   @default(REGULER)
+  kapasitas    Int
+  hasProyektor Boolean          @default(false)
+  hasAC        Boolean          @default(false)
+  gedung       String           @db.VarChar(50)
+  lantai       Int
+  status       StatusRuangKelas @default(AVAILABLE)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  // Relations
+  enrollments    Enrollment[]
+  jadwalRuangan  JadwalRuangan[]
+
+  @@map("ruang_kelas")
+}
+
+// ============================================
+// Semester
+// ============================================
+enum JenisSemester {
+  GANJIL
+  GENAP
+}
+
+model Semester {
+  id          Int          @id @default(autoincrement())
+  tahunAjaran String       @db.VarChar(20) // e.g., 2024/2025
+  semester    JenisSemester
+  isActive    Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  enrollments   Enrollment[]
+  krs           KRS[]
+  jadwalRuangan JadwalRuangan[]
+
+  @@unique([tahunAjaran, semester])
+  @@map("semester")
+}
+
+// ============================================
+// Schedule (Time Slot)
+// ============================================
+enum Hari {
+  SENIN
+  SELASA
+  RABU
+  KAMIS
+  JUMAT
+  SABTU
+  MINGGU
+}
+
+model Jadwal {
+  id         Int      @id @default(autoincrement())
+  hari       Hari
+  jamMulai   String   @db.VarChar(5) // HH:mm
+  jamSelesai String   @db.VarChar(5) // HH:mm
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  enrollments   Enrollment[]
+  jadwalRuangan JadwalRuangan[]
+
+  @@unique([hari, jamMulai, jamSelesai])
+  @@map("jadwal")
+}
+
+// ============================================
+// Enrollment (Course Enrollment)
+// ============================================
+enum StatusEnrollment {
+  ACTIVE
+  COMPLETED
+  DROPPED
+}
+
+model Enrollment {
+  id           Int             @id @default(autoincrement())
+  mahasiswaId  Int
+  mataKuliahId Int
+  dosenId      Int
+  ruangKelasId Int
+  jadwalId     Int
+  semesterId   Int
+  status       StatusEnrollment @default(ACTIVE)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  // Relations
+  mahasiswa  Mahasiswa  @relation(fields: [mahasiswaId], references: [id])
+  mataKuliah MataKuliah @relation(fields: [mataKuliahId], references: [id])
+  dosen      Dosen      @relation(fields: [dosenId], references: [id])
+  ruangKelas RuangKelas @relation(fields: [ruangKelasId], references: [id])
+  jadwal     Jadwal     @relation(fields: [jadwalId], references: [id])
+  semester   Semester   @relation(fields: [semesterId], references: [id])
+  nilai      Nilai?
+
+  @@unique([mahasiswaId, mataKuliahId, semesterId])
+  @@map("enrollment")
+}
+
+// ============================================
+// Grade
+// ============================================
+model Nilai {
+  id           Int      @id @default(autoincrement())
+  enrollmentId Int      @unique
+  nilaiTugas   Float?   // 0-100
+  nilaiUTS     Float?   // 0-100
+  nilaiUAS     Float?   // 0-100
+  nilaiTotal   Float?   // Calculated
+  hurufMutu    String?  @db.VarChar(3) // A, B+, B, C+, C, D, E
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
+
+  @@map("nilai")
+}
+
+// ============================================
+// KRS (Study Plan Card)
+// ============================================
+enum StatusKRS {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+model KRS {
+  id            Int       @id @default(autoincrement())
+  mahasiswaId   Int
+  semesterId    Int
+  status        StatusKRS @default(DRAFT)
+  tanggalSubmit DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  mahasiswa Mahasiswa  @relation(fields: [mahasiswaId], references: [id])
+  semester  Semester   @relation(fields: [semesterId], references: [id])
+  details   KRSDetail[]
+
+  @@unique([mahasiswaId, semesterId])
+  @@map("krs")
+}
+
+// ============================================
+// KRS Detail
+// ============================================
+model KRSDetail {
+  id           Int      @id @default(autoincrement())
+  krsId        Int
+  mataKuliahId Int
+  createdAt    DateTime @default(now())
+
+  // Relations
+  krs        KRS        @relation(fields: [krsId], references: [id], onDelete: Cascade)
+  mataKuliah MataKuliah @relation(fields: [mataKuliahId], references: [id])
+
+  @@unique([krsId, mataKuliahId])
+  @@map("krs_detail")
+}
+
+// ============================================
+// Room Schedule (for tracking room usage)
+// ============================================
+model JadwalRuangan {
+  id           Int      @id @default(autoincrement())
+  ruangKelasId Int
+  jadwalId     Int
+  semesterId   Int
+  keterangan   String?  @db.VarChar(255)
+  createdAt    DateTime @default(now())
+
+  // Relations
+  ruangKelas RuangKelas @relation(fields: [ruangKelasId], references: [id])
+  jadwal     Jadwal     @relation(fields: [jadwalId], references: [id])
+  semester   Semester   @relation(fields: [semesterId], references: [id])
+
+  @@unique([ruangKelasId, jadwalId, semesterId])
+  @@map("jadwal_ruangan")
+}
