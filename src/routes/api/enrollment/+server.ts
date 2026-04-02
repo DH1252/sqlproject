@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import type { RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 import { validateEnrollmentConflicts } from '$lib/server/enrollment';
+import { syncMahasiswaIpk } from '$lib/server/gpa';
 import { StatusEnrollment } from '$lib/types';
 import {
 	apiList,
@@ -113,7 +114,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				});
 
 				if (existingEnrollment?.status === 'DROPPED') {
-					return tx.enrollment.update({
+					const enrollment = await tx.enrollment.update({
 						where: { id: existingEnrollment.id },
 						data,
 						include: {
@@ -121,15 +122,23 @@ export const POST: RequestHandler = async ({ request }) => {
 							semester: { select: { id: true, tahunAjaran: true, semester: true } }
 						}
 					});
+
+					await syncMahasiswaIpk(tx, data.mahasiswaId);
+
+					return enrollment;
 				}
 
-				return tx.enrollment.create({
+				const enrollment = await tx.enrollment.create({
 					data,
 					include: {
 						...enrollmentInclude,
 						semester: { select: { id: true, tahunAjaran: true, semester: true } }
 					}
 				});
+
+				await syncMahasiswaIpk(tx, data.mahasiswaId);
+
+				return enrollment;
 			},
 			{ isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
 		);

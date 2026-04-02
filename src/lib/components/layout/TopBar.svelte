@@ -125,16 +125,30 @@
 						id="user-menu-panel"
 						class="absolute right-0 z-50 mt-2 w-48 rounded-lg border border-base-300 bg-base-100 p-1 shadow-lg"
 					>
-						<a href="/profile" class="block rounded-md px-3 py-2 text-sm hover:bg-base-200" onclick={() => closeUserMenu()}>
-							Profil
-						</a>
-						<a href="/settings" class="block rounded-md px-3 py-2 text-sm hover:bg-base-200" onclick={() => closeUserMenu()}>
-							Pengaturan
-						</a>
+						<div class="px-3 py-2 text-xs text-subtle">
+							Akses administrator demo aktif.
+						</div>
 						<div class="my-1 h-px bg-base-300"></div>
-						<a href="/logout" class="block rounded-md px-3 py-2 text-sm text-error hover:bg-error/10" onclick={() => closeUserMenu()}>
-							Keluar
+						<a href="/" class="block rounded-md px-3 py-2 text-sm hover:bg-base-200" onclick={() => closeUserMenu()}>
+							Dashboard
 						</a>
+						<button
+							type="button"
+							class="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-base-200"
+							onclick={() => {
+								toggleTheme?.();
+								closeUserMenu(true);
+							}}
+						>
+							Tema {theme === 'dark' ? 'terang' : 'gelap'}
+						</button>
+						<button
+							type="button"
+							class="block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-base-200"
+							onclick={() => closeUserMenu(true)}
+						>
+							Tutup menu
+						</button>
 					</div>
 				{/if}
 			</div>

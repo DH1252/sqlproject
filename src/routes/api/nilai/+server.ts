@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
+import { syncMahasiswaIpk } from '$lib/server/gpa';
 import { apiList, apiOk, handleApiError, httpError, parseOptionalBoolean, parseOptionalPositiveInt, parsePagination, readRequestBody } from '$lib/server/http';
 import { validateNilaiCreate } from '$lib/server/validation';
 import { calculateGrade } from '$lib/utils/grade-calculator';
@@ -77,7 +78,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				const [enrollment, existingNilai] = await Promise.all([
 					tx.enrollment.findUnique({
 						where: { id: data.enrollmentId },
-						select: { status: true }
+						select: { status: true, mahasiswaId: true }
 					}),
 					tx.nilai.findUnique({
 						where: { enrollmentId: data.enrollmentId },
@@ -115,6 +116,8 @@ export const POST: RequestHandler = async ({ request }) => {
 					},
 					include: nilaiEnrollmentInclude
 				});
+
+				await syncMahasiswaIpk(tx, enrollment.mahasiswaId);
 
 				return {
 					nilai,

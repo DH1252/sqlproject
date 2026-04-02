@@ -7,14 +7,22 @@ import { validateProgramStudiCreate } from '$lib/server/validation';
 export const GET: RequestHandler = async ({ url }) => {
 	try {
 		const { page, limit, skip } = parsePagination(url);
+		const search = url.searchParams.get('search') || '';
+
+		const where = search
+			? {
+				OR: [{ kode: { contains: search } }, { nama: { contains: search } }]
+			}
+			: undefined;
 
 		const [programs, total] = await Promise.all([
 			prisma.programStudi.findMany({
+				where,
 				skip,
 				take: limit,
 				orderBy: { createdAt: 'desc' }
 			}),
-			prisma.programStudi.count()
+			prisma.programStudi.count({ where })
 		]);
 
 		return apiList(programs, {

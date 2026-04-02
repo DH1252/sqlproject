@@ -30,7 +30,8 @@
 		try {
 			const response = await programStudiService.getAll({
 				page: pagination.page,
-				limit: pagination.limit
+				limit: pagination.limit,
+				search: searchQuery.trim() || undefined
 			});
 			if (response.success) {
 				data = response.data;
@@ -145,9 +146,10 @@
 	<div class="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end">
 		<div class="w-full lg:max-w-md lg:flex-1">
 			<SearchInput 
+				bind:value={searchQuery}
 				label="Cari program studi"
 				ariaLabel="Cari program studi berdasarkan nama atau kode"
-				value={searchQuery}
+				loading={loading}
 				placeholder="Nama atau kode program studi"
 				onSearch={handleSearch}
 			/>

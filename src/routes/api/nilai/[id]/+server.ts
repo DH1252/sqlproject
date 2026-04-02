@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
+import { syncMahasiswaIpk } from '$lib/server/gpa';
 import { apiError, apiMessage, apiOk, handleApiError, httpError, parseIdParam, readRequestBody } from '$lib/server/http';
 import { validateNilaiUpdate } from '$lib/server/validation';
 import { calculateGrade } from '$lib/utils/grade-calculator';
@@ -45,7 +46,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 				const currentNilai = await tx.nilai.findUnique({
 					where: { id },
 					include: {
-						enrollment: { select: { status: true } }
+						enrollment: { select: { status: true, mahasiswaId: true } }
 					}
 				});
 
@@ -63,7 +64,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 					nilaiUAS: data.nilaiUAS ?? currentNilai.nilaiUAS
 				});
 
-				return tx.nilai.update({
+				const nilai = await tx.nilai.update({
 					where: { id },
 					data: {
 						...data,
@@ -79,6 +80,10 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 						}
 					}
 				});
+
+				await syncMahasiswaIpk(tx, currentNilai.enrollment.mahasiswaId);
+
+				return nilai;
 			},
 			{ isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
 		);
@@ -99,8 +104,23 @@ export const DELETE: RequestHandler = async ({ params }) => {
 	try {
 		const id = parseIdParam(params.id);
 
-		await prisma.nilai.delete({
-			where: { id }
+		await prisma.$transaction(async (tx) => {
+			const currentNilai = await tx.nilai.findUnique({
+				where: { id },
+				select: {
+					enrollment: { select: { mahasiswaId: true } }
+				}
+			});
+
+			if (!currentNilai) {
+				httpError(404, 'Nilai not found');
+			}
+
+			await tx.nilai.delete({
+				where: { id }
+			});
+
+			await syncMahasiswaIpk(tx, currentNilai.enrollment.mahasiswaId);
 		});
 
 		return apiMessage('Nilai deleted successfully');

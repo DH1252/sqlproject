@@ -18,6 +18,7 @@ export const mahasiswaService = {
 		const query = buildQueryString({
 			page: params.page,
 			limit: params.limit,
+			search: params.search,
 			programStudiId: params.programStudiId,
 			angkatan: params.angkatan,
 			status: params.status

@@ -35,6 +35,7 @@
 			const response = await mahasiswaService.getAll({
 				page: pagination.page,
 				limit: pagination.limit,
+				search: searchQuery.trim() || undefined,
 				programStudiId: filterProgram || undefined,
 				status: filterStatus || undefined
 			});
@@ -164,9 +165,10 @@
 	<div class="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end">
 		<div class="w-full lg:max-w-md lg:flex-1">
 			<SearchInput 
+				bind:value={searchQuery}
 				label="Cari mahasiswa"
 				ariaLabel="Cari mahasiswa berdasarkan nama atau NIM"
-				value={searchQuery}
+				loading={loading}
 				placeholder="Nama mahasiswa atau NIM"
 				onSearch={handleSearch}
 			/>

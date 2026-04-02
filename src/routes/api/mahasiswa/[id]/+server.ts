@@ -1,8 +1,8 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 import { apiError, apiMessage, apiOk, handleApiError, parseIdParam, readRequestBody } from '$lib/server/http';
+import { summarizeMahasiswaIpk } from '$lib/server/gpa';
 import { validateMahasiswaUpdate } from '$lib/server/validation';
-import { calculateGPA } from '$lib/utils/grade-calculator';
 
 // GET /api/mahasiswa/[id] - Get student by ID with IPK
 export const GET: RequestHandler = async ({ params, url }) => {
@@ -36,23 +36,22 @@ export const GET: RequestHandler = async ({ params, url }) => {
 		}
 
 		let ipkData = null;
-		if (includeNilai && mahasiswa.enrollments) {
-			const completedEnrollments = mahasiswa.enrollments.filter(
-				(enrollment: any) => enrollment.status === 'COMPLETED' && enrollment.nilai?.hurufMutu
-			);
-			const grades = completedEnrollments.map((enrollment: any) => ({
-				hurufMutu: enrollment.nilai.hurufMutu,
-				sks: enrollment.mataKuliah.sks
-			}));
-			ipkData = {
-				ipk: calculateGPA(grades),
-				totalSks: grades.reduce((sum: number, grade: any) => sum + grade.sks, 0),
-				totalCourses: completedEnrollments.length
-			};
+		if (includeNilai) {
+			const ipkEnrollments = await prisma.enrollment.findMany({
+				where: { mahasiswaId: id },
+				select: {
+					status: true,
+					nilai: { select: { hurufMutu: true } },
+					mataKuliah: { select: { sks: true } }
+				}
+			});
+
+			ipkData = summarizeMahasiswaIpk(ipkEnrollments);
 		}
 
 		return apiOk({
 			...mahasiswa,
+			...(ipkData && { ipk: ipkData.ipk }),
 			...(ipkData && { ipkCalculation: ipkData })
 		});
 	} catch (error) {

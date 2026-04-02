@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import type { RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
 import { validateEnrollmentConflicts } from '$lib/server/enrollment';
+import { syncMahasiswaIpk } from '$lib/server/gpa';
 import { apiError, apiMessage, apiOk, handleApiError, httpError, parseIdParam, readRequestBody } from '$lib/server/http';
 import { validateEnrollmentUpdate } from '$lib/server/validation';
 
@@ -73,11 +74,15 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 
 				await validateEnrollmentConflicts(tx, candidate, { excludeEnrollmentId: id });
 
-				return tx.enrollment.update({
+				const enrollment = await tx.enrollment.update({
 					where: { id },
 					data,
 					include: enrollmentInclude
 				});
+
+				await syncMahasiswaIpk(tx, currentEnrollment.mahasiswaId);
+
+				return enrollment;
 			},
 			{ isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
 		);
@@ -101,8 +106,21 @@ export const DELETE: RequestHandler = async ({ params }) => {
 	try {
 		const id = parseIdParam(params.id);
 
-		await prisma.enrollment.delete({
-			where: { id }
+		await prisma.$transaction(async (tx) => {
+			const currentEnrollment = await tx.enrollment.findUnique({
+				where: { id },
+				select: { mahasiswaId: true }
+			});
+
+			if (!currentEnrollment) {
+				httpError(404, 'Enrollment not found');
+			}
+
+			await tx.enrollment.delete({
+				where: { id }
+			});
+
+			await syncMahasiswaIpk(tx, currentEnrollment.mahasiswaId);
 		});
 
 		return apiMessage('Enrollment deleted successfully');

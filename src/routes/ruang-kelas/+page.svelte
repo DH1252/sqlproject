@@ -33,6 +33,7 @@
 			const response = await ruangKelasService.getAll({
 				page: pagination.page,
 				limit: pagination.limit,
+				search: searchQuery.trim() || undefined,
 				tipe: filterTipe || undefined,
 				status: filterStatus || undefined
 			});
@@ -51,6 +52,12 @@
 
 	function handlePageChange(page: number) {
 		pagination.page = page;
+		loadData();
+	}
+
+	function handleSearch(query: string) {
+		searchQuery = query;
+		pagination.page = 1;
 		loadData();
 	}
 
@@ -145,11 +152,12 @@
 	<div class="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end">
 		<div class="w-full lg:max-w-md lg:flex-1">
 			<SearchInput 
+				bind:value={searchQuery}
 				label="Cari ruang kelas"
 				ariaLabel="Cari ruang kelas berdasarkan nama ruang"
-				value={searchQuery}
+				loading={loading}
 				placeholder="Nama ruang kelas"
-				onSearch={() => loadData()}
+				onSearch={handleSearch}
 			/>
 		</div>
 		<label class="w-full space-y-2 sm:w-auto">

@@ -16,6 +16,7 @@ export const ruangKelasService = {
 		const query = buildQueryString({
 			page: params.page,
 			limit: params.limit,
+			search: params.search,
 			tipe: params.tipe,
 			status: params.status,
 			gedung: params.gedung

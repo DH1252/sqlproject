@@ -14,7 +14,8 @@ export const programStudiService = {
 	async getAll(params: ListQueryParams = {}): Promise<ApiListResponse<ProgramStudi>> {
 		const query = buildQueryString({
 			page: params.page,
-			limit: params.limit
+			limit: params.limit,
+			search: params.search
 		});
 		return apiGetList<ProgramStudi>(`${ENDPOINT}${query}`);
 	},

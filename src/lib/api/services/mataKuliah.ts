@@ -15,6 +15,7 @@ export const mataKuliahService = {
 		const query = buildQueryString({
 			page: params.page,
 			limit: params.limit,
+			search: params.search,
 			programStudiId: params.programStudiId,
 			semester: params.semester
 		});

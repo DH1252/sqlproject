@@ -16,6 +16,7 @@ export const dosenService = {
 		const query = buildQueryString({
 			page: params.page,
 			limit: params.limit,
+			search: params.search,
 			programStudiId: params.programStudiId
 		});
 		return apiGetList<Dosen>(`${ENDPOINT}${query}`);
