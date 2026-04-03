@@ -115,6 +115,17 @@ export interface Mahasiswa {
 	updatedAt: string;
 }
 
+export interface IpkCalculationSummary {
+	ipk: number;
+	totalSks: number;
+	totalCourses: number;
+}
+
+export interface MahasiswaAcademicRecord extends Mahasiswa {
+	enrollments?: Enrollment[];
+	ipkCalculation?: IpkCalculationSummary;
+}
+
 export interface Dosen {
 	id: number;
 	nip: string;
@@ -215,6 +226,7 @@ export interface KRS {
 	status: StatusKRS;
 	tanggalSubmit?: string;
 	details?: KRSDetail[];
+	totalSks?: number;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -237,6 +249,129 @@ export interface JadwalRuangan {
 	semester?: Semester;
 	keterangan?: string;
 	createdAt: string;
+}
+
+export interface RuangKelasAvailabilityItem extends RuangKelas {
+	available: boolean;
+	conflicts: string[];
+	scheduledSections: number;
+	studentEnrollments: number;
+}
+
+export interface RuangKelasAvailabilityResponse {
+	jadwalId: number;
+	semesterId: number;
+	summary: {
+		totalCount: number;
+		availableCount: number;
+		unavailableCount: number;
+	};
+	rooms: RuangKelasAvailabilityItem[];
+}
+
+export interface RuangKelasUtilizationItem extends RuangKelas {
+	totalSlots: number;
+	usedSlots: number;
+	availableSlots: number;
+	utilizationRate: number;
+	reservedSlots: number;
+	scheduledSections: number;
+	studentEnrollments: number;
+}
+
+export interface RuangKelasUtilizationResponse {
+	semester: Pick<Semester, 'id' | 'tahunAjaran' | 'semester'> | null;
+	summary: {
+		totalRooms: number;
+		activeRooms: number;
+		averageUtilizationRate: number;
+		totalUsedSlots: number;
+		totalSlots: number;
+		totalStudentEnrollments: number;
+		totalScheduledSections: number;
+	};
+	rooms: RuangKelasUtilizationItem[];
+}
+
+export interface TranscriptCourseRow {
+	id: number;
+	tahunAjaran: string;
+	semester: JenisSemester;
+	kode: string;
+	nama: string;
+	dosen: string;
+	sks: number;
+	status: StatusEnrollment;
+	nilaiTotal: number | null;
+	hurufMutu: string | null;
+	gradePoint: number | null;
+	countsTowardsGpa: boolean;
+	countsAsPassed: boolean;
+}
+
+export interface TranscriptSemesterSummary {
+	semesterId: number | null;
+	tahunAjaran: string;
+	semester: JenisSemester;
+	ips: number;
+	totalSksDiambil: number;
+	totalSksLulus: number;
+	gradedCourses: number;
+}
+
+export interface TranscriptReport {
+	summary: {
+		ipk: number;
+		totalSksDiambil: number;
+		totalSksLulus: number;
+		gradedCourses: number;
+		totalSemesters: number;
+	};
+	semesters: TranscriptSemesterSummary[];
+	courses: TranscriptCourseRow[];
+}
+
+export type TimetableOccupancy = 'EMPTY' | 'SECTION' | 'RESERVED';
+
+export interface RoomTimetableSection {
+	key: string;
+	mataKuliahKode: string;
+	mataKuliahNama: string;
+	dosenNama: string;
+	studentCount: number;
+}
+
+export interface RoomTimetableCell {
+	hari: Hari;
+	jadwalId: number | null;
+	jamMulai: string;
+	jamSelesai: string;
+	label: string;
+	occupancy: TimetableOccupancy;
+	sections: RoomTimetableSection[];
+	reservationNote: string | null;
+}
+
+export interface RoomTimetableRow {
+	jamMulai: string;
+	jamSelesai: string;
+	label: string;
+	cells: RoomTimetableCell[];
+}
+
+export interface RuangKelasTimetableResponse {
+	room: Pick<RuangKelas, 'id' | 'kode' | 'nama' | 'gedung' | 'lantai' | 'kapasitas' | 'tipe'>;
+	semester: Pick<Semester, 'id' | 'tahunAjaran' | 'semester'> | null;
+	days: Hari[];
+	summary: {
+		totalSlots: number;
+		occupiedSlots: number;
+		availableSlots: number;
+		reservedSlots: number;
+		scheduledSections: number;
+		studentEnrollments: number;
+	};
+	rows: RoomTimetableRow[];
 }
 
 // ============================================
@@ -372,6 +507,7 @@ export interface EnrollmentFilter extends ListQueryParams {
 	mahasiswaId?: number;
 	mataKuliahId?: number;
 	dosenId?: number;
+	ruangKelasId?: number;
 	semesterId?: number;
 	status?: StatusEnrollment;
 	includeSemester?: boolean;
