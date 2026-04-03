@@ -1,6 +1,6 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
-import { ACTIVE_SEMESTER_KEY, semesterSelect } from '$lib/server/semester';
+import { semesterSelect } from '$lib/server/semester';
 import { apiList, apiOk, handleApiError, httpError, parseOptionalBoolean, parsePagination, readRequestBody } from '$lib/server/http';
 import { validateSemesterCreate } from '$lib/server/validation';
 
@@ -9,11 +9,20 @@ export const GET: RequestHandler = async ({ url }) => {
 	try {
 		const { page, limit, skip } = parsePagination(url);
 		const isActive = parseOptionalBoolean(url.searchParams.get('isActive'), 'isActive');
+		const search = url.searchParams.get('search')?.trim();
 
 		const where: any = {};
 
 		if (isActive !== undefined) {
 			where.isActive = isActive;
+		}
+
+		if (search) {
+			const semesterKeyword = search.toUpperCase();
+			where.OR = [
+				{ tahunAjaran: { contains: search, mode: 'insensitive' } },
+				...(['GANJIL', 'GENAP'].includes(semesterKeyword) ? [{ semester: semesterKeyword }] : [])
+			];
 		}
 
 		const [semester, total] = await Promise.all([
@@ -44,7 +53,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const data = validateSemesterCreate(await readRequestBody(request));
 
 		const newSemester = await prisma.$transaction(async (tx) => {
-			const activeCount = await tx.semester.count({ where: { activeKey: ACTIVE_SEMESTER_KEY } });
+			const activeCount = await tx.semester.count({ where: { isActive: true } });
 
 			if (activeCount === 0 && !data.isActive) {
 				httpError(400, 'The first semester must be created as active');
@@ -52,16 +61,13 @@ export const POST: RequestHandler = async ({ request }) => {
 
 			if (data.isActive) {
 				await tx.semester.updateMany({
-					where: { activeKey: ACTIVE_SEMESTER_KEY },
-					data: { isActive: false, activeKey: null }
+					where: { isActive: true },
+					data: { isActive: false }
 				});
 			}
 
 			return tx.semester.create({
-				data: {
-					...data,
-					activeKey: data.isActive ? ACTIVE_SEMESTER_KEY : null
-				},
+				data,
 				select: semesterSelect
 			});
 		});

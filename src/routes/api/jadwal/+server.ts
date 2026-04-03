@@ -16,11 +16,21 @@ export const GET: RequestHandler = async ({ url }) => {
 	try {
 		const { page, limit, skip } = parsePagination(url, { defaultLimit: 50 });
 		const hari = parseOptionalEnum(url.searchParams.get('hari'), 'hari', Object.values(Hari));
+		const search = url.searchParams.get('search')?.trim();
 
 		const where: any = {};
 
 		if (hari) {
 			where.hari = hari;
+		}
+
+		if (search) {
+			const hariKeyword = search.toUpperCase();
+			where.OR = [
+				{ jamMulai: { contains: search } },
+				{ jamSelesai: { contains: search } },
+				...((Object.values(Hari) as string[]).includes(hariKeyword) ? [{ hari: hariKeyword }] : [])
+			];
 		}
 
 		const [jadwal, total] = await Promise.all([

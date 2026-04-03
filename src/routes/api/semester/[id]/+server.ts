@@ -1,6 +1,6 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
-import { ACTIVE_SEMESTER_KEY, semesterSelect } from '$lib/server/semester';
+import { semesterSelect } from '$lib/server/semester';
 import { apiError, apiMessage, apiOk, handleApiError, httpError, parseIdParam, readRequestBody } from '$lib/server/http';
 import { validateSemesterUpdate } from '$lib/server/validation';
 
@@ -48,7 +48,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			if (data.isActive === false && currentSemester.isActive) {
 				const otherActiveCount = await tx.semester.count({
 					where: {
-						activeKey: ACTIVE_SEMESTER_KEY,
+						isActive: true,
 						id: { not: id }
 					}
 				});
@@ -60,19 +60,14 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 
 			if (data.isActive === true) {
 				await tx.semester.updateMany({
-					where: { activeKey: ACTIVE_SEMESTER_KEY, id: { not: id } },
-					data: { isActive: false, activeKey: null }
+					where: { isActive: true, id: { not: id } },
+					data: { isActive: false }
 				});
 			}
 
 			return tx.semester.update({
 				where: { id },
-				data: {
-					...data,
-					...(data.isActive !== undefined && {
-						activeKey: data.isActive ? ACTIVE_SEMESTER_KEY : null
-					})
-				},
+				data,
 				select: semesterSelect
 			});
 		});

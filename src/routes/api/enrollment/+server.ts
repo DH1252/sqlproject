@@ -32,7 +32,9 @@ export const GET: RequestHandler = async ({ url }) => {
 		const mahasiswaId = parseOptionalPositiveInt(url.searchParams.get('mahasiswaId'), 'mahasiswaId');
 		const mataKuliahId = parseOptionalPositiveInt(url.searchParams.get('mataKuliahId'), 'mataKuliahId');
 		const dosenId = parseOptionalPositiveInt(url.searchParams.get('dosenId'), 'dosenId');
+		const ruangKelasId = parseOptionalPositiveInt(url.searchParams.get('ruangKelasId'), 'ruangKelasId');
 		const semesterId = parseOptionalPositiveInt(url.searchParams.get('semesterId'), 'semesterId');
+		const search = url.searchParams.get('search')?.trim();
 		const status = parseOptionalEnum(url.searchParams.get('status'), 'status', Object.values(StatusEnrollment));
 		const includeSemester = parseOptionalBoolean(url.searchParams.get('includeSemester'), 'includeSemester') ?? true;
 		const includeNilai = parseOptionalBoolean(url.searchParams.get('includeNilai'), 'includeNilai') ?? true;
@@ -51,12 +53,45 @@ export const GET: RequestHandler = async ({ url }) => {
 			where.dosenId = dosenId;
 		}
 
+		if (ruangKelasId) {
+			where.ruangKelasId = ruangKelasId;
+		}
+
 		if (semesterId) {
 			where.semesterId = semesterId;
 		}
 
 		if (status) {
 			where.status = status;
+		}
+
+		if (search) {
+			where.OR = [
+				{
+					mahasiswa: {
+						OR: [
+							{ nim: { contains: search, mode: 'insensitive' } },
+							{ nama: { contains: search, mode: 'insensitive' } }
+						]
+					}
+				},
+				{
+					mataKuliah: {
+						OR: [
+							{ kode: { contains: search, mode: 'insensitive' } },
+							{ nama: { contains: search, mode: 'insensitive' } }
+						]
+					}
+				},
+				{
+					dosen: {
+						OR: [
+							{ nip: { contains: search, mode: 'insensitive' } },
+							{ nama: { contains: search, mode: 'insensitive' } }
+						]
+					}
+				}
+			];
 		}
 
 		const [enrollments, total] = await Promise.all([

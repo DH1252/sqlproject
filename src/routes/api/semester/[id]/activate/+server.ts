@@ -1,6 +1,6 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
-import { ACTIVE_SEMESTER_KEY, semesterSelect } from '$lib/server/semester';
+import { semesterSelect } from '$lib/server/semester';
 import { apiOk, handleApiError, httpError, parseIdParam } from '$lib/server/http';
 
 export const PUT: RequestHandler = async ({ params }) => {
@@ -18,13 +18,13 @@ export const PUT: RequestHandler = async ({ params }) => {
 			}
 
 			await tx.semester.updateMany({
-				where: { activeKey: ACTIVE_SEMESTER_KEY, id: { not: id } },
-				data: { isActive: false, activeKey: null }
+				where: { isActive: true, id: { not: id } },
+				data: { isActive: false }
 			});
 
 			return tx.semester.update({
 				where: { id },
-				data: { isActive: true, activeKey: ACTIVE_SEMESTER_KEY },
+				data: { isActive: true },
 				select: semesterSelect
 			});
 		});
