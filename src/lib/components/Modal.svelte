@@ -47,6 +47,28 @@
 		(firstFocusable ?? panelEl).focus();
 	}
 
+	function focusFallbackTarget() {
+		if (typeof document === 'undefined') return;
+
+		const fallbackTarget =
+			document.getElementById('main-content') ??
+			document.querySelector<HTMLElement>('main, h1');
+
+		if (!fallbackTarget) return;
+
+		const restoreTabIndex = !fallbackTarget.hasAttribute('tabindex');
+		if (restoreTabIndex) {
+			fallbackTarget.setAttribute('tabindex', '-1');
+			fallbackTarget.addEventListener(
+				'blur',
+				() => fallbackTarget.removeAttribute('tabindex'),
+				{ once: true }
+			);
+		}
+
+		fallbackTarget.focus();
+	}
+
 	function deactivateDialog() {
 		if (typeof document === 'undefined') return;
 
@@ -54,7 +76,10 @@
 
 		if (lastFocusedElement?.isConnected) {
 			lastFocusedElement.focus();
+			return;
 		}
+
+		focusFallbackTarget();
 	}
 
 	function trapFocus(event: KeyboardEvent) {
@@ -117,13 +142,13 @@
 {#if open}
 	<div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center sm:p-6">
 		{#if onClose}
-			<button type="button" class="fixed inset-0 bg-black/50" onclick={onClose} aria-label={`Close ${title} dialog`}></button>
+			<button type="button" class="app-scrim fixed inset-0" onclick={onClose} aria-label={`Tutup dialog ${title}`}></button>
 		{:else}
-			<div class="fixed inset-0 bg-black/50"></div>
+			<div class="app-scrim fixed inset-0"></div>
 		{/if}
 		<div
 			bind:this={panelEl}
-			class="relative flex max-h-[min(90vh,42rem)] w-full flex-col overflow-hidden rounded-lg bg-base-100 shadow-xl {sizeClasses[size]}"
+			class="floating-panel relative flex max-h-[min(90vh,42rem)] w-full flex-col overflow-hidden rounded-lg bg-base-100 {sizeClasses[size]}"
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby={titleId}
@@ -132,10 +157,10 @@
 			<div class="flex justify-between items-center p-4 border-b">
 				<h3 id={titleId} class="text-lg font-semibold">{title}</h3>
 				{#if onClose}
-					<button type="button" class="btn btn-sm btn-ghost btn-circle touch-target" onclick={onClose} aria-label="Tutup dialog">
-						<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-						</svg>
+				<button type="button" class="btn btn-sm btn-ghost btn-circle touch-target" onclick={onClose} aria-label="Tutup dialog">
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+					</svg>
 					</button>
 				{/if}
 			</div>
