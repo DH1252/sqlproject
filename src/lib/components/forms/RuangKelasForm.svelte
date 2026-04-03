@@ -107,16 +107,18 @@
 	}
 </script>
 
+<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
 <EntityForm {fields} bind:data={formData} {loading}>
 	<div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
 		<button type="button" class="btn btn-ghost w-full sm:w-auto" onclick={onCancel} disabled={loading}>
 			Batal
 		</button>
-		<button type="button" class="btn btn-primary w-full sm:w-auto" onclick={handleSubmit} disabled={loading}>
+		<button type="submit" class="btn btn-primary w-full sm:w-auto" disabled={loading}>
 			{#if loading}
-				<span class="loading loading-spinner loading-sm"></span>
+				<span class="loading loading-spinner loading-sm" aria-hidden="true"></span>
 			{/if}
 			{data ? 'Update' : 'Simpan'}
 		</button>
 	</div>
 </EntityForm>
+</form>

@@ -9,12 +9,21 @@
 		onSubmit: (data: DosenFormData) => void;
 		onCancel: () => void;
 		loading?: boolean;
+		errors?: Record<string, string>;
+		formNotice?: {
+			tone?: 'error' | 'warning' | 'info';
+			title: string;
+			description?: string;
+		} | null;
 	}
 
-	let { data, onSubmit, onCancel, loading = false }: Props = $props();
+	let { data, onSubmit, onCancel, loading = false, errors = {}, formNotice = null }: Props = $props();
 
 	let programs = $state<ProgramStudi[]>([]);
 	let programsLoading = $state(false);
+	let programsError = $state('');
+	let programQuery = $state('');
+	let selectedProgram = $state<ProgramStudi | null>(null);
 
 	// svelte-ignore state_referenced_locally
 	let formData = $state<DosenFormData>({
@@ -25,18 +34,59 @@
 		jabatan: data?.jabatan || 'Dosen'
 	});
 
-	onMount(async () => {
+	async function loadPrograms(query = programQuery) {
 		programsLoading = true;
+		programsError = '';
+
 		try {
-			const response = await programStudiService.getAll({ limit: 100 });
+			const response = await programStudiService.getAll({ limit: 20, search: query.trim() || undefined });
 			if (response.success) {
-				programs = response.data;
+				const nextPrograms = response.data;
+				programs = selectedProgram && !nextPrograms.some((program) => program.id === selectedProgram?.id)
+					? [selectedProgram, ...nextPrograms]
+					: nextPrograms;
 				if (!data && programs.length > 0 && formData.programStudiId === 0) {
 					formData.programStudiId = programs[0].id;
+					selectedProgram = programs[0];
 				}
+				return;
 			}
+
+			programsError = response.error || 'Daftar program studi belum berhasil dimuat.';
+			programs = [];
+		} catch (error) {
+			programsError = 'Daftar program studi belum berhasil dimuat. Coba muat ulang.';
+			programs = [];
 		} finally {
 			programsLoading = false;
+		}
+	}
+
+	async function ensureSelectedProgram() {
+		if (!formData.programStudiId) return;
+
+		const response = await programStudiService.getById(formData.programStudiId);
+		if (response.success) {
+			selectedProgram = response.data;
+			programs = [response.data];
+		}
+	}
+
+	function handleProgramSearch(query: string) {
+		programQuery = query;
+		void loadPrograms(query);
+	}
+
+	onMount(() => {
+		if (data?.programStudiId) {
+			void ensureSelectedProgram();
+		}
+	});
+
+	$effect(() => {
+		const currentProgram = programs.find((program) => program.id === Number(formData.programStudiId));
+		if (currentProgram) {
+			selectedProgram = currentProgram;
 		}
 	});
 
@@ -65,9 +115,14 @@
 		{
 			name: 'programStudiId',
 			label: 'Program Studi',
-			type: 'select' as const,
+			type: 'async-select' as const,
 			required: true,
-			options: programs.map(p => ({ value: p.id, label: `${p.kode} - ${p.nama}` }))
+			options: programs.map(p => ({ value: p.id, label: `${p.kode} - ${p.nama}` })),
+			searchValue: programQuery,
+			searchPlaceholder: 'Cari program studi berdasarkan nama atau kode',
+			loadingOptions: programsLoading,
+			onSearch: handleProgramSearch,
+			emptyMessage: 'Tidak ada program studi yang sesuai dengan pencarian.'
 		},
 		{
 			name: 'jabatan',
@@ -83,22 +138,43 @@
 	}
 </script>
 
-{#if programsLoading}
-	<div class="flex justify-center py-8">
-		<span class="loading loading-spinner loading-lg text-primary"></span>
-	</div>
-{:else}
-	<EntityForm {fields} bind:data={formData} {loading}>
+	<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+	<div class="space-y-4">
+		{#if formNotice}
+			<div class="alert {formNotice.tone === 'warning' ? 'alert-warning' : formNotice.tone === 'info' ? 'alert-info' : 'alert-error'}" role={formNotice.tone === 'error' ? 'alert' : 'status'}>
+				<div class="space-y-1">
+					<div class="font-medium">{formNotice.title}</div>
+					{#if formNotice.description}
+						<div class="text-sm">{formNotice.description}</div>
+					{/if}
+				</div>
+			</div>
+		{/if}
+
+		{#if programsError}
+			<div class="alert alert-warning" role="status">
+				<div class="space-y-1">
+					<div class="font-medium">Daftar program studi perlu dimuat ulang.</div>
+					<div class="text-sm">{programsError}</div>
+				</div>
+				<button type="button" class="btn btn-sm btn-ghost" onclick={() => void loadPrograms()} disabled={loading || programsLoading}>
+					Muat ulang daftar
+				</button>
+			</div>
+		{/if}
+
+		<EntityForm {fields} bind:data={formData} {loading} {errors}>
 		<div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
 			<button type="button" class="btn btn-ghost w-full sm:w-auto" onclick={onCancel} disabled={loading}>
 				Batal
 			</button>
-			<button type="button" class="btn btn-primary w-full sm:w-auto" onclick={handleSubmit} disabled={loading}>
+			<button type="submit" class="btn btn-primary w-full sm:w-auto" disabled={loading || programsLoading || formData.programStudiId === 0}>
 				{#if loading}
-					<span class="loading loading-spinner loading-sm"></span>
+					<span class="loading loading-spinner loading-sm" aria-hidden="true"></span>
 				{/if}
-				{data ? 'Update' : 'Simpan'}
+				{data ? 'Simpan perubahan' : 'Simpan data dosen'}
 			</button>
 		</div>
-	</EntityForm>
-{/if}
+		</EntityForm>
+	</div>
+	</form>

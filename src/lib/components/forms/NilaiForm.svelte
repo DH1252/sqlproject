@@ -15,7 +15,10 @@
 	let { data, onSubmit, onCancel, loading = false }: Props = $props();
 
 	let enrollments = $state<Enrollment[]>([]);
-	let loadingData = $state(true);
+	let loadingData = $state(false);
+	let enrollmentLoading = $state(false);
+	let enrollmentQuery = $state('');
+	let selectedEnrollment = $state<Enrollment | null>(null);
 
 	// svelte-ignore state_referenced_locally
 	let formData = $state<NilaiFormData>({
@@ -37,20 +40,56 @@
 	let hurufMutu = $derived(() => gradePreview()?.hurufMutu ?? '-');
 
 	onMount(async () => {
+		if (data?.enrollmentId) {
+			loadingData = true;
+			try {
+				const selectedResponse = await enrollmentService.getById(data.enrollmentId);
+				if (selectedResponse.success) {
+					selectedEnrollment = selectedResponse.data;
+					enrollments = [selectedResponse.data];
+				}
+			} finally {
+				loadingData = false;
+			}
+		}
+	});
+
+	async function loadEnrollmentOptions(query = enrollmentQuery) {
+		enrollmentLoading = true;
 		try {
 			const response = await enrollmentService.getAll({
-				limit: 100,
+				limit: 20,
+				search: query.trim() || undefined,
 				includeSemester: true,
 				includeNilai: true
 			});
+
 			if (response.success) {
-				enrollments = response.data.filter((enrollment: Enrollment) => !enrollment.nilai || enrollment.id === data?.enrollmentId);
-				if (!data && enrollments.length > 0) {
+				const nextEnrollments = response.data.filter((enrollment: Enrollment) => !enrollment.nilai || enrollment.id === data?.enrollmentId);
+				enrollments = selectedEnrollment && !nextEnrollments.some((enrollment) => enrollment.id === selectedEnrollment?.id)
+					? [selectedEnrollment, ...nextEnrollments]
+					: nextEnrollments;
+				if (!data && enrollments.length > 0 && formData.enrollmentId === 0) {
 					formData.enrollmentId = enrollments[0].id;
+					selectedEnrollment = enrollments[0];
 				}
 			}
+
+			return response;
 		} finally {
-			loadingData = false;
+			enrollmentLoading = false;
+		}
+	}
+
+	function handleEnrollmentSearch(query: string) {
+		enrollmentQuery = query;
+		void loadEnrollmentOptions(query);
+	}
+
+	$effect(() => {
+		const currentEnrollment = enrollments.find((enrollment) => enrollment.id === Number(formData.enrollmentId));
+		if (currentEnrollment) {
+			selectedEnrollment = currentEnrollment;
 		}
 	});
 
@@ -60,12 +99,17 @@
 				{
 					name: 'enrollmentId',
 					label: 'Enrollment',
-					type: 'select' as const,
+					type: 'async-select' as const,
 					required: true,
 					options: enrollments.map((enrollment) => ({
 						value: enrollment.id,
 						label: `${enrollment.mahasiswa?.nim} - ${enrollment.mahasiswa?.nama} - ${enrollment.mataKuliah?.nama} (${enrollment.semester?.tahunAjaran})`
-					}))
+					})),
+					searchValue: enrollmentQuery,
+					searchPlaceholder: 'Cari enrollment berdasarkan mahasiswa, dosen, atau mata kuliah',
+					loadingOptions: enrollmentLoading,
+					onSearch: handleEnrollmentSearch,
+					emptyMessage: 'Tidak ada enrollment yang sesuai dengan pencarian.'
 				}
 			]
 			: []),
@@ -105,10 +149,12 @@
 </script>
 
 {#if loadingData}
-	<div class="flex justify-center py-8">
-		<span class="loading loading-spinner loading-lg text-primary"></span>
+	<div class="flex justify-center py-8" role="status">
+		<span class="loading loading-spinner loading-lg text-primary" aria-hidden="true"></span>
+		<span class="sr-only">Memuat...</span>
 	</div>
 {:else}
+	<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
 	<EntityForm {fields} bind:data={formData} {loading}>
 		{#if data}
 			<div class="rounded-lg border border-base-300 bg-base-200 p-4">
@@ -125,20 +171,20 @@
 				<p class="mt-2 text-xs text-muted">Enrollment tidak bisa diubah saat edit nilai.</p>
 			</div>
 		{:else if enrollments.length === 0}
-			<div class="alert alert-info">
-				<span>Semua enrollment sudah memiliki nilai. Hapus nilai lama atau buat enrollment baru terlebih dahulu.</span>
+			<div class="alert alert-info" role="status">
+				<span>{enrollmentQuery ? 'Tidak ada enrollment yang sesuai dengan pencarian.' : 'Cari enrollment terlebih dahulu untuk mulai mengisi nilai.'}</span>
 			</div>
 		{/if}
 
-		<div class="bg-base-200 p-4 rounded-lg mt-4">
+		<div class="bg-base-200 p-4 rounded-lg mt-4" aria-live="polite" aria-atomic="true">
 			<div class="grid grid-cols-2 gap-4">
 				<div>
 					<span class="text-sm text-muted">Nilai Total</span>
-					<div class="text-2xl font-bold">{nilaiTotal()}</div>
+					<div class="text-2xl font-semibold">{nilaiTotal()}</div>
 				</div>
 				<div>
 					<span class="text-sm text-muted">Huruf Mutu</span>
-					<div class="text-2xl font-bold text-primary">{hurufMutu()}</div>
+					<div class="text-2xl font-semibold text-base-content">{hurufMutu()}</div>
 				</div>
 			</div>
 		</div>
@@ -147,16 +193,16 @@
 				Batal
 			</button>
 			<button
-				type="button"
+				type="submit"
 				class="btn btn-primary w-full sm:w-auto"
-				onclick={handleSubmit}
-				disabled={loading || (!data && enrollments.length === 0)}
+				disabled={loading || (!data && formData.enrollmentId === 0)}
 			>
 				{#if loading}
-					<span class="loading loading-spinner loading-sm"></span>
+					<span class="loading loading-spinner loading-sm" aria-hidden="true"></span>
 				{/if}
 				{data ? 'Update' : 'Simpan'}
 			</button>
 		</div>
 	</EntityForm>
+	</form>
 {/if}

@@ -4,6 +4,7 @@
 	import { StatusKRS } from '$lib/types';
 	import { mahasiswaService } from '$lib/api/services/mahasiswa';
 	import { semesterService } from '$lib/api/services/semester';
+	import { fetchAllPages } from '$lib/utils/fetch-all-pages';
 	import { onMount } from 'svelte';
 
 	interface Props {
@@ -18,6 +19,9 @@
 	let mahasiswa = $state<Mahasiswa[]>([]);
 	let semester = $state<Semester[]>([]);
 	let loadingData = $state(true);
+	let mahasiswaLoading = $state(false);
+	let mahasiswaQuery = $state('');
+	let selectedMahasiswa = $state<Mahasiswa | null>(null);
 
 	// svelte-ignore state_referenced_locally
 	let formData = $state<KRSFormData>({
@@ -33,17 +37,8 @@
 		}
 
 		try {
-			const [mRes, sRes] = await Promise.all([
-				mahasiswaService.getAll({ limit: 100 }),
-				semesterService.getAll({ limit: 100 })
-			]);
+			const sRes = await fetchAllPages((params) => semesterService.getAll(params));
 			
-			if (mRes.success) {
-				mahasiswa = mRes.data;
-				if (!data && mahasiswa.length > 0) {
-					formData.mahasiswaId = mahasiswa[0].id;
-				}
-			}
 			if (sRes.success) {
 				semester = sRes.data;
 				if (!data && semester.length > 0) {
@@ -55,15 +50,53 @@
 		}
 	});
 
+	async function loadMahasiswaOptions(query = mahasiswaQuery) {
+		mahasiswaLoading = true;
+		try {
+			const response = await mahasiswaService.getAll({ limit: 20, search: query.trim() || undefined });
+			if (response.success) {
+				const nextMahasiswa = response.data;
+				mahasiswa = selectedMahasiswa && !nextMahasiswa.some((item) => item.id === selectedMahasiswa?.id)
+					? [selectedMahasiswa, ...nextMahasiswa]
+					: nextMahasiswa;
+				if (!data && mahasiswa.length > 0 && formData.mahasiswaId === 0) {
+					formData.mahasiswaId = mahasiswa[0].id;
+					selectedMahasiswa = mahasiswa[0];
+				}
+			}
+
+			return response;
+		} finally {
+			mahasiswaLoading = false;
+		}
+	}
+
+	function handleMahasiswaSearch(query: string) {
+		mahasiswaQuery = query;
+		void loadMahasiswaOptions(query);
+	}
+
+	$effect(() => {
+		const currentMahasiswa = mahasiswa.find((item) => item.id === Number(formData.mahasiswaId));
+		if (currentMahasiswa) {
+			selectedMahasiswa = currentMahasiswa;
+		}
+	});
+
 	const fields = $derived([
 		...(!data
 			? [
 				{
 					name: 'mahasiswaId',
 					label: 'Mahasiswa',
-					type: 'select' as const,
+					type: 'async-select' as const,
 					required: true,
-					options: mahasiswa.map((item) => ({ value: item.id, label: `${item.nim} - ${item.nama}` }))
+					options: mahasiswa.map((item) => ({ value: item.id, label: `${item.nim} - ${item.nama}` })),
+					searchValue: mahasiswaQuery,
+					searchPlaceholder: 'Cari mahasiswa berdasarkan NIM atau nama',
+					loadingOptions: mahasiswaLoading,
+					onSearch: handleMahasiswaSearch,
+					emptyMessage: 'Tidak ada mahasiswa yang sesuai dengan pencarian.'
 				},
 				{
 					name: 'semesterId',
@@ -86,14 +119,16 @@
 </script>
 
 {#if loadingData}
-	<div class="flex justify-center py-8">
-		<span class="loading loading-spinner loading-lg text-primary"></span>
+	<div class="flex justify-center py-8" role="status">
+		<span class="loading loading-spinner loading-lg text-primary" aria-hidden="true"></span>
+		<span class="sr-only">Memuat...</span>
 	</div>
 {:else}
+	<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
 	<EntityForm {fields} bind:data={formData} {loading}>
 		{#if data}
 			<div class="space-y-4">
-				<div class="alert alert-warning">
+				<div class="alert alert-warning" role="status">
 					<span>KRS yang ditolak dapat dikembalikan ke draft agar bisa diajukan ulang.</span>
 				</div>
 				<div class="rounded-lg border border-base-300 bg-base-200 p-4 text-sm">
@@ -102,13 +137,13 @@
 					<p class="mt-2 text-xs text-muted">Status saat ini: {data.status}</p>
 				</div>
 			</div>
-		{:else if mahasiswa.length === 0 || semester.length === 0}
-			<div class="alert alert-info">
-				<span>Data mahasiswa dan semester harus tersedia sebelum membuat KRS baru.</span>
+		{:else if semester.length === 0}
+			<div class="alert alert-info" role="status">
+				<span>Data semester harus tersedia sebelum membuat KRS baru.</span>
 			</div>
 		{:else}
 			<div class="rounded-lg border border-base-300 bg-base-200 p-4 text-sm text-muted">
-				KRS baru selalu dibuat dengan status draft.
+				Cari mahasiswa terlebih dahulu, lalu pilih semester untuk membuat KRS baru dengan status draft.
 			</div>
 		{/if}
 
@@ -117,16 +152,16 @@
 				Batal
 			</button>
 			<button
-				type="button"
+				type="submit"
 				class="btn btn-primary w-full sm:w-auto"
-				onclick={handleSubmit}
-				disabled={loading || (!data && (mahasiswa.length === 0 || semester.length === 0))}
+				disabled={loading || (!data && (formData.mahasiswaId === 0 || formData.semesterId === 0))}
 			>
 				{#if loading}
-					<span class="loading loading-spinner loading-sm"></span>
+					<span class="loading loading-spinner loading-sm" aria-hidden="true"></span>
 				{/if}
 				{data ? 'Kembalikan ke Draft' : 'Simpan'}
 			</button>
 		</div>
 	</EntityForm>
+	</form>
 {/if}
