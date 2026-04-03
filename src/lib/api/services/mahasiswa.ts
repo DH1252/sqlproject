@@ -5,6 +5,7 @@ import type {
 	ApiResponse,
 	Enrollment,
 	KRS,
+	MahasiswaAcademicRecord,
 	Mahasiswa,
 	MahasiswaFilter,
 	MahasiswaFormData,
@@ -28,6 +29,10 @@ export const mahasiswaService = {
 
 	async getById(id: number): Promise<ApiResponse<Mahasiswa>> {
 		return apiGet<Mahasiswa>(`${ENDPOINT}/${id}`);
+	},
+
+	async getAcademicRecord(id: number): Promise<ApiResponse<MahasiswaAcademicRecord>> {
+		return apiGet<MahasiswaAcademicRecord>(`${ENDPOINT}/${id}?include=nilai`);
 	},
 
 	async create(data: MahasiswaFormData): Promise<ApiResponse<Mahasiswa>> {

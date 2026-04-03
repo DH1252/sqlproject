@@ -1,4 +1,4 @@
-export const ACTIVE_SEMESTER_KEY = 'ACTIVE';
+import type { Prisma, PrismaClient } from '@prisma/client';
 
 export const semesterSelect = {
 	id: true,
@@ -8,3 +8,13 @@ export const semesterSelect = {
 	createdAt: true,
 	updatedAt: true
 } as const;
+
+type SemesterClient = Pick<PrismaClient, 'semester'> | Pick<Prisma.TransactionClient, 'semester'>;
+
+export async function findActiveSemester(client: SemesterClient) {
+	return client.semester.findFirst({
+		where: { isActive: true },
+		select: semesterSelect,
+		orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }]
+	});
+}

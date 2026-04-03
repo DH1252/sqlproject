@@ -15,9 +15,11 @@ export const enrollmentService = {
 		const query = buildQueryString({
 			page: params.page,
 			limit: params.limit,
+			search: params.search,
 			mahasiswaId: params.mahasiswaId,
 			mataKuliahId: params.mataKuliahId,
 			dosenId: params.dosenId,
+			ruangKelasId: params.ruangKelasId,
 			semesterId: params.semesterId,
 			status: params.status,
 			includeSemester: params.includeSemester ?? false,

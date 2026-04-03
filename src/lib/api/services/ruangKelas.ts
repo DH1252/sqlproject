@@ -4,9 +4,13 @@ import type {
 	ApiMessageResponse,
 	ApiResponse,
 	JadwalRuangan,
+	RuangKelasAvailabilityResponse,
 	RuangKelas,
 	RuangKelasFilter,
-	RuangKelasFormData
+	RuangKelasFormData,
+	RuangKelasTimetableResponse,
+	RuangKelasUtilizationResponse,
+	TipeRuangKelas
 } from '$lib/types';
 
 const ENDPOINT = '/api/ruang-kelas';
@@ -40,16 +44,47 @@ export const ruangKelasService = {
 		return apiDelete<null>(`${ENDPOINT}/${id}`);
 	},
 
-	async getJadwal(id: number): Promise<ApiResponse<JadwalRuangan[]>> {
-		return apiGet<JadwalRuangan[]>(`${ENDPOINT}/${id}/jadwal`);
+	async getJadwal(id: number, semesterId?: number): Promise<ApiResponse<JadwalRuangan[]>> {
+		const query = buildQueryString({ semesterId });
+		return apiGet<JadwalRuangan[]>(`${ENDPOINT}/${id}/jadwal${query}`);
 	},
 
 	async checkAvailability(
 		id: number,
 		jadwalId: number,
-		semesterId: number
+		semesterId: number,
+		excludeEnrollmentId?: number
 	): Promise<ApiResponse<{ available: boolean; conflicts?: string[] }>> {
-		const query = buildQueryString({ jadwalId, semesterId });
+		const query = buildQueryString({ jadwalId, semesterId, excludeEnrollmentId });
 		return apiGet<{ available: boolean; conflicts?: string[] }>(`${ENDPOINT}/${id}/available${query}`);
+	},
+
+	async getAvailableRooms(
+		jadwalId: number,
+		semesterId: number,
+		options: {
+			excludeEnrollmentId?: number;
+			kapasitasMin?: number;
+			tipe?: TipeRuangKelas;
+		} = {}
+	): Promise<ApiResponse<RuangKelasAvailabilityResponse>> {
+		const query = buildQueryString({
+			jadwalId,
+			semesterId,
+			excludeEnrollmentId: options.excludeEnrollmentId,
+			kapasitasMin: options.kapasitasMin,
+			tipe: options.tipe
+		});
+		return apiGet<RuangKelasAvailabilityResponse>(`${ENDPOINT}/available${query}`);
+	},
+
+	async getUtilization(semesterId?: number): Promise<ApiResponse<RuangKelasUtilizationResponse>> {
+		const query = buildQueryString({ semesterId });
+		return apiGet<RuangKelasUtilizationResponse>(`${ENDPOINT}/utilization${query}`);
+	},
+
+	async getTimetable(id: number, semesterId?: number): Promise<ApiResponse<RuangKelasTimetableResponse>> {
+		const query = buildQueryString({ semesterId });
+		return apiGet<RuangKelasTimetableResponse>(`${ENDPOINT}/${id}/timetable${query}`);
 	}
 };
