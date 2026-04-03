@@ -6,11 +6,12 @@
 	interface Props {
 		children: import('svelte').Snippet;
 		title?: string;
+		section?: string;
 		theme?: 'light' | 'dark';
 		toggleTheme?: () => void;
 	}
 
-	let { children, title = '', theme = 'light', toggleTheme }: Props = $props();
+	let { children, title = '', section = '', theme = 'light', toggleTheme }: Props = $props();
 
 	let sidebarOpen = $state(false);
 	let drawerEl = $state<HTMLDivElement | null>(null);
@@ -118,6 +119,10 @@
 
 <svelte:window onkeydown={handleDrawerKeydown} />
 
+<a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-lg focus:bg-base-100 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg focus:ring-2 focus:ring-accent">
+	Langsung ke konten utama
+</a>
+
 <div class="flex min-h-screen bg-base-100">
 	<div class="hidden lg:block">
 		<Sidebar />
@@ -127,7 +132,7 @@
 		<div class="fixed inset-0 z-40 lg:hidden">
 			<button
 				type="button"
-				class="absolute inset-0 bg-black/60 backdrop-blur-sm"
+				class="app-scrim-strong absolute inset-0"
 				onclick={closeSidebar}
 				aria-label="Tutup menu navigasi"
 			></button>
@@ -136,7 +141,7 @@
 				class="absolute left-0 top-0 h-full"
 				role="dialog"
 				aria-modal="true"
-				aria-label="Mobile navigation"
+				aria-label="Menu navigasi seluler"
 				tabindex="-1"
 			>
 				<Sidebar onNavigate={closeSidebar} />
@@ -145,9 +150,9 @@
 	{/if}
 
 	<div class="flex-1 flex flex-col min-w-0">
-		<TopBar {title} {theme} {toggleTheme} onMenuToggle={toggleSidebar} />
+		<TopBar {title} {section} {theme} {toggleTheme} onMenuToggle={toggleSidebar} />
 		
-		<main class="flex-1 p-4 lg:p-8 overflow-y-auto">
+		<main id="main-content" class="flex-1 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8 xl:px-10">
 			{@render children()}
 		</main>
 	</div>
