@@ -1,10 +1,11 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { prisma } from '$lib/server/prisma';
-import { apiError, apiOk, handleApiError, parseIdParam } from '$lib/server/http';
+import { apiError, apiOk, handleApiError, parseIdParam, parseOptionalPositiveInt } from '$lib/server/http';
 
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, url }) => {
 	try {
 		const id = parseIdParam(params.id);
+		const semesterId = parseOptionalPositiveInt(url.searchParams.get('semesterId'), 'semesterId');
 
 		const ruangKelas = await prisma.ruangKelas.findUnique({
 			where: { id },
@@ -16,7 +17,10 @@ export const GET: RequestHandler = async ({ params }) => {
 		}
 
 		const jadwalRuangan = await prisma.jadwalRuangan.findMany({
-			where: { ruangKelasId: id },
+			where: {
+				ruangKelasId: id,
+				...(semesterId && { semesterId })
+			},
 			include: {
 				jadwal: true,
 				semester: { select: { id: true, tahunAjaran: true, semester: true } }
