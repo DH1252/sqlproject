@@ -1,195 +1,197 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { mahasiswaService } from '$lib/api/services/mahasiswa';
-	import { dosenService } from '$lib/api/services/dosen';
-	import { mataKuliahService } from '$lib/api/services/mataKuliah';
-	import { ruangKelasService } from '$lib/api/services/ruangKelas';
-	import { semesterService } from '$lib/api/services/semester';
-	import { enrollmentService } from '$lib/api/services/enrollment';
-	import type { Enrollment, Semester } from '$lib/types';
+	import { formatAcademicLabel } from '$lib/utils/format-label';
+	import { getEnrollmentStatusChip } from '$lib/utils/status-chip';
 
-	let stats = $state({
-		totalMahasiswa: 0,
-		totalDosen: 0,
-		totalMataKuliah: 0,
-		totalRuangKelas: 0
-	});
-	let activeSemester = $state<Semester | null>(null);
-	let recentEnrollments = $state<Enrollment[]>([]);
-	let loading = $state(true);
+	let { data }: { data: import('./$types').PageData } = $props();
 
-	const focusLinks = [
-		{
-			href: '/enrollment',
-			title: 'Verifikasi enrollment',
-			description: 'Tinjau kelas yang baru dipilih mahasiswa sebelum kapasitas penuh.'
-		},
+	const operationalActions = [
 		{
 			href: '/jadwal',
-			title: 'Periksa jadwal kuliah',
-			description: 'Pastikan ruang, dosen, dan jam kuliah tetap sinkron untuk semester berjalan.'
+			title: 'Sinkronkan jadwal kuliah',
+			description: 'Pastikan ruang, dosen, dan jam kuliah tetap selaras pada semester berjalan.'
 		},
 		{
 			href: '/mahasiswa',
-			title: 'Kelola data mahasiswa',
-			description: 'Perbarui status mahasiswa aktif, cuti, atau lulus dari satu halaman kerja.'
+			title: 'Perbarui status mahasiswa',
+			description: 'Rapikan data aktif, cuti, dan lulus sebelum perubahan semester makin padat.'
 		},
 		{
 			href: '/nilai',
-			title: 'Lanjutkan input nilai',
-			description: 'Masuk ke modul penilaian untuk meninjau hasil belajar terbaru.'
+			title: 'Pantau input nilai',
+			description: 'Tinjau kelas yang sudah siap diproses agar penilaian tidak tertunda.'
+		}
+	];
+
+	const setupActions = [
+		{
+			href: '/program-studi',
+			title: 'Periksa master data inti',
+			description: 'Pastikan program studi, dosen, mahasiswa, dan mata kuliah siap dipakai.'
+		},
+		{
+			href: '/jadwal',
+			title: 'Siapkan jadwal kuliah',
+			description: 'Lengkapi jadwal setelah semester aktif ditetapkan agar alur akademik tetap konsisten.'
+		},
+		{
+			href: '/mahasiswa',
+			title: 'Rapikan data mahasiswa',
+			description: 'Perbarui status mahasiswa sebelum proses KRS dan enrollment dimulai.'
 		}
 	];
 
 	const metrics = $derived([
-		{ label: 'Mahasiswa', value: stats.totalMahasiswa },
-		{ label: 'Dosen', value: stats.totalDosen },
-		{ label: 'Mata kuliah', value: stats.totalMataKuliah },
-		{ label: 'Ruang kelas', value: stats.totalRuangKelas }
+		{ label: 'Mahasiswa', value: data.stats.totalMahasiswa },
+		{ label: 'Dosen', value: data.stats.totalDosen },
+		{ label: 'Mata kuliah', value: data.stats.totalMataKuliah },
+		{ label: 'Ruang kelas', value: data.stats.totalRuangKelas }
 	]);
 
 	let semesterLabel = $derived(
-		activeSemester ? `${activeSemester.tahunAjaran} - ${activeSemester.semester}` : 'Belum ada semester aktif'
+		data.activeSemester
+			? `${data.activeSemester.tahunAjaran} - ${formatAcademicLabel(data.activeSemester.semester)}`
+			: 'Belum ada semester aktif'
 	);
 
-	onMount(async () => {
-		const [mRes, dRes, mkRes, rkRes, sRes, eRes] = await Promise.allSettled([
-				mahasiswaService.getAll({ limit: 1 }),
-				dosenService.getAll({ limit: 1 }),
-				mataKuliahService.getAll({ limit: 1 }),
-				ruangKelasService.getAll({ limit: 1 }),
-				semesterService.getActive(),
-				enrollmentService.getAll({ limit: 5 })
-			]);
+	const primaryAction = $derived(
+		data.activeSemester
+			? {
+				eyebrow: 'Prioritas utama',
+				title: `Verifikasi enrollment untuk ${semesterLabel}`,
+				description:
+					'Pastikan mahasiswa masuk ke kelas yang tepat sebelum kapasitas penuh dan keputusan jadwal mengunci proses semester berjalan.',
+				href: '/enrollment',
+				label: 'Buka verifikasi enrollment'
+			}
+			: {
+				eyebrow: 'Langkah penyiapan',
+				title: 'Tetapkan semester aktif sebelum modul lain dipakai',
+				description:
+					'Semester aktif menjadi acuan untuk KRS, jadwal kuliah, enrollment, dan penilaian. Selesaikan langkah ini lebih dahulu agar seluruh proses berikutnya tetap konsisten.',
+				href: '/semester',
+				label: 'Tetapkan semester aktif'
+			}
+	);
 
-		if (mRes.status === 'fulfilled' && mRes.value.success && mRes.value.pagination) {
-			stats.totalMahasiswa = mRes.value.pagination.total;
-		}
+	const secondaryActions = $derived(data.activeSemester ? operationalActions : setupActions);
 
-		if (dRes.status === 'fulfilled' && dRes.value.success && dRes.value.pagination) {
-			stats.totalDosen = dRes.value.pagination.total;
-		}
-
-		if (mkRes.status === 'fulfilled' && mkRes.value.success && mkRes.value.pagination) {
-			stats.totalMataKuliah = mkRes.value.pagination.total;
-		}
-
-		if (rkRes.status === 'fulfilled' && rkRes.value.success && rkRes.value.pagination) {
-			stats.totalRuangKelas = rkRes.value.pagination.total;
-		}
-
-		if (sRes.status === 'fulfilled' && sRes.value.success) {
-			activeSemester = sRes.value.data;
-		}
-
-		if (eRes.status === 'fulfilled' && eRes.value.success) {
-			recentEnrollments = eRes.value.data;
-		}
-
-		loading = false;
-	});
+	const recentEmptyAction = $derived(
+		data.activeSemester
+			? { href: '/enrollment', label: 'Masuk ke modul enrollment' }
+			: { href: '/semester', label: 'Kelola semester aktif' }
+	);
 </script>
 
 <svelte:head>
 	<title>Dashboard - Sistem Akademik</title>
 </svelte:head>
 
-<div class="space-y-8">
-	<section class="space-y-2">
-		<p class="text-xs font-medium uppercase tracking-[0.18em] text-subtle">Ringkasan Operasional</p>
-		<h1 class="text-3xl font-display font-semibold text-balance">Dashboard Akademik</h1>
-		<p class="max-w-3xl text-muted text-pretty">
-			Pantau semester aktif, kapasitas data inti, dan aktivitas akademik terbaru tanpa berpindah halaman.
-		</p>
+<div class="space-y-10">
+	<section class="space-y-6">
+		<div class="max-w-3xl space-y-2">
+			<h1 class="text-3xl font-display font-semibold text-balance lg:text-4xl">Dashboard Akademik</h1>
+			<p class="text-muted text-pretty lg:text-lg">
+				Mulai dari prioritas semester berjalan, lalu lanjutkan ke modul yang paling membutuhkan perhatian.
+			</p>
+		</div>
+
+		<ul class="flex flex-wrap gap-2 text-sm">
+			{#each metrics as metric}
+				<li class="inline-flex items-center gap-2 rounded-full border border-base-300/70 bg-base-100 px-3 py-1.5">
+					<span class="font-semibold text-base-content">{metric.value}</span>
+					<span class="text-muted">{metric.label}</span>
+				</li>
+			{/each}
+		</ul>
 	</section>
 
 	<section class="card-elevated p-6 lg:p-8">
-		<div class="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.9fr)] lg:items-start">
-			<div class="space-y-4">
-				<p class="text-sm font-medium uppercase tracking-[0.14em] text-subtle">Semester aktif</p>
+		<div class="dashboard-hero-grid">
+			<article class="space-y-6">
 				<div class="space-y-2">
-					<h2 class="text-2xl font-display font-semibold text-balance">{semesterLabel}</h2>
-					{#if activeSemester}
-						<p class="text-muted text-pretty">
-							Gunakan semester ini sebagai acuan untuk enrollment, jadwal kuliah, dan pengolahan nilai.
-						</p>
-					{:else}
-						<p class="text-muted text-pretty">
-							Tetapkan satu semester aktif agar proses KRS, enrollment, dan penilaian berjalan pada periode yang benar.
-						</p>
-					{/if}
+					<p class="text-sm font-medium text-muted">Semester aktif</p>
+					<h2 class="text-2xl font-display font-semibold text-balance lg:text-3xl">{semesterLabel}</h2>
+					<p class="max-w-2xl text-muted text-pretty">
+						{primaryAction.description}
+					</p>
 				</div>
-				<div class="pt-2">
-					<a href="/semester" class="inline-flex items-center gap-2 text-sm font-medium text-muted transition-colors hover:text-base-content">
+
+				<div class="flex flex-wrap items-center gap-3">
+					<a href={primaryAction.href} class="btn btn-primary px-5">
+						{primaryAction.label}
+					</a>
+					<a href="/semester" class="touch-target inline-flex items-center gap-2 text-sm font-medium text-muted transition-colors hover:text-base-content">
 						Kelola semester
 						<span aria-hidden="true">-></span>
 					</a>
 				</div>
-			</div>
+			</article>
 
-			<dl class="grid grid-cols-2 gap-x-6 gap-y-5 border-t border-base-300/60 pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
-				{#each metrics as metric}
-					<div class="space-y-1 min-w-0">
-						<dt class="text-sm text-muted">{metric.label}</dt>
-						<dd class="font-display text-3xl leading-none tracking-tight">
-							{loading ? '—' : metric.value}
-						</dd>
-					</div>
-				{/each}
-			</dl>
+			<aside class="space-y-4">
+				<h3 class="text-lg font-display font-semibold text-balance">Tindak lanjut</h3>
+
+				<div class="space-y-3">
+					{#each secondaryActions as action, index}
+						<a href={action.href} class="dashboard-priority-link">
+							<span class="text-xs font-medium text-subtle">0{index + 1}</span>
+							<div class="min-w-0 space-y-1">
+								<p class="font-medium text-base-content text-pretty">{action.title}</p>
+								<p class="text-sm text-muted text-pretty">{action.description}</p>
+							</div>
+							<span class="pt-0.5 text-subtle" aria-hidden="true">-></span>
+						</a>
+					{/each}
+				</div>
+			</aside>
 		</div>
 	</section>
 
-	<div class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(18rem,0.9fr)]">
-		<div class="card-elevated p-6">
-			<h2 class="font-display text-lg font-semibold mb-5">Enrollment Terbaru</h2>
-			{#if loading}
-				<div class="flex justify-center py-8">
-					<div class="h-6 w-6 animate-spin rounded-full border-2 border-base-300 border-t-current text-base-content/70"></div>
+	<section class="space-y-4">
+		<div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+			<div class="space-y-1">
+				<h2 class="text-2xl font-display font-semibold text-balance">Enrollment terbaru</h2>
+				<p class="max-w-3xl text-muted text-pretty">
+					Perubahan kelas terbaru yang perlu ditinjau.
+				</p>
+			</div>
+
+			<a href="/enrollment" class="touch-target inline-flex items-center gap-2 text-sm font-medium text-muted transition-colors hover:text-base-content">
+				Seluruh enrollment
+				<span aria-hidden="true">-></span>
+			</a>
+		</div>
+
+		<div class="card-elevated overflow-hidden">
+			{#if data.recentEnrollments.length === 0}
+				<div class="grid gap-3 px-6 py-8 text-left lg:px-8">
+					<h3 class="text-lg font-display font-semibold text-balance">Belum ada aktivitas enrollment terbaru.</h3>
+					<p class="max-w-2xl text-sm text-muted text-pretty">
+						Tidak ada perubahan kelas baru yang perlu ditinjau saat ini. Lanjutkan ke modul utama untuk memastikan semester tetap berjalan rapi.
+					</p>
+					<div>
+						<a href={recentEmptyAction.href} class="touch-target inline-flex items-center gap-2 text-sm font-medium text-muted transition-colors hover:text-base-content">
+							{recentEmptyAction.label}
+							<span aria-hidden="true">-></span>
+						</a>
+					</div>
 				</div>
-			{:else if recentEnrollments.length === 0}
-				<p class="text-muted text-center py-8">Belum ada enrollment terbaru.</p>
 			{:else}
-				<div class="space-y-3">
-					{#each recentEnrollments as enrollment}
-						<div class="flex items-center justify-between p-4 rounded-lg bg-base-200/50 hover:bg-base-200 transition-colors">
-							<div class="min-w-0">
-								<p class="font-medium truncate">{enrollment.mahasiswa?.nama}</p>
-								<p class="text-sm text-muted truncate">{enrollment.mataKuliah?.nama}</p>
+				<div class="divide-y divide-base-300/60">
+					{#each data.recentEnrollments as enrollment}
+						<a href="/enrollment" class="dashboard-activity-row">
+							<div class="min-w-0 space-y-1">
+							<p class="font-medium text-base-content text-pretty">{enrollment.mahasiswa?.nama}</p>
+							<p class="text-sm text-muted text-pretty">{enrollment.mataKuliah?.nama}</p>
 							</div>
-							<span class="status-chip tone-slate px-2 py-1 rounded-md flex-shrink-0 ml-4">{enrollment.status}</span>
-						</div>
+
+							<div class="flex items-center gap-3">
+							<span class={`${getEnrollmentStatusChip(enrollment.status)} px-2 py-1 rounded-md flex-shrink-0`}>{formatAcademicLabel(enrollment.status)}</span>
+								<span class="text-subtle" aria-hidden="true">-></span>
+							</div>
+						</a>
 					{/each}
 				</div>
 			{/if}
-			<div class="mt-5 pt-4 border-t border-base-300/50">
-				<a href="/enrollment" class="inline-flex items-center gap-2 text-sm font-medium text-muted transition-colors hover:text-base-content">
-					Lihat semua enrollment
-					<span aria-hidden="true">-></span>
-				</a>
-			</div>
 		</div>
-
-		<div class="card-elevated p-6">
-			<div class="space-y-2">
-				<h2 class="font-display text-lg font-semibold">Fokus Hari Ini</h2>
-				<p class="text-sm text-muted text-pretty">
-					Empat pintu kerja utama untuk menjaga operasi akademik tetap rapi dan tepat waktu.
-				</p>
-			</div>
-			<div class="mt-5 space-y-2">
-				{#each focusLinks as link}
-					<a href={link.href} class="block rounded-lg border border-base-300/60 px-4 py-4 transition-colors hover:bg-base-200/60">
-						<div class="flex items-start justify-between gap-4">
-							<div class="min-w-0 space-y-1">
-								<p class="font-medium text-base-content">{link.title}</p>
-								<p class="text-sm text-muted text-pretty">{link.description}</p>
-							</div>
-							<span class="pt-0.5 text-subtle" aria-hidden="true">-></span>
-						</div>
-					</a>
-				{/each}
-			</div>
-		</div>
-	</div>
+	</section>
 </div>

@@ -6,10 +6,55 @@
 	import { onMount } from 'svelte';
 
 	type ThemeMode = 'light' | 'dark';
+	type RouteMeta = {
+		section: string;
+		title: string;
+	};
 
 	let { children } = $props();
 
-	let title = $derived(page.data?.title || 'Sistem Akademik');
+	const routeMetaEntries: Array<{ prefix: string; meta: RouteMeta }> = [
+		{ prefix: '/ruang-kelas/timetable', meta: { section: 'Akademik', title: 'Timetable Ruang' } },
+		{ prefix: '/program-studi', meta: { section: 'Master Data', title: 'Program Studi' } },
+		{ prefix: '/mahasiswa', meta: { section: 'Master Data', title: 'Mahasiswa' } },
+		{ prefix: '/dosen', meta: { section: 'Master Data', title: 'Dosen' } },
+		{ prefix: '/mata-kuliah', meta: { section: 'Master Data', title: 'Mata Kuliah' } },
+		{ prefix: '/ruang-kelas', meta: { section: 'Master Data', title: 'Ruang Kelas' } },
+		{ prefix: '/semester', meta: { section: 'Akademik', title: 'Semester' } },
+		{ prefix: '/jadwal', meta: { section: 'Akademik', title: 'Jadwal Kuliah' } },
+		{ prefix: '/enrollment', meta: { section: 'Akademik', title: 'Enrollment' } },
+		{ prefix: '/nilai', meta: { section: 'Nilai & KRS', title: 'Nilai' } },
+		{ prefix: '/krs', meta: { section: 'Nilai & KRS', title: 'KRS' } },
+		{ prefix: '/transkrip', meta: { section: 'Nilai & KRS', title: 'Transkrip Akademik' } },
+		{ prefix: '/', meta: { section: 'Ringkasan Operasional', title: 'Dashboard Akademik' } }
+	];
+
+	function titleCaseSegment(value: string) {
+		return value
+			.split('-')
+			.filter(Boolean)
+			.map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+			.join(' ');
+	}
+
+	function resolveRouteMeta(pathname: string): RouteMeta {
+		const match = routeMetaEntries.find((entry) => pathname === entry.prefix || pathname.startsWith(`${entry.prefix}/`));
+
+		if (match) {
+			return match.meta;
+		}
+
+		const fallbackTitle = pathname.split('/').filter(Boolean).at(-1);
+
+		return {
+			section: 'Sistem Akademik',
+			title: fallbackTitle ? titleCaseSegment(fallbackTitle) : 'Sistem Akademik'
+		};
+	}
+
+	const currentRouteMeta = $derived(resolveRouteMeta(page.url.pathname));
+	let title = $derived(page.data?.title || currentRouteMeta.title);
+	let section = $derived(currentRouteMeta.section);
 
 	let theme = $state<ThemeMode>('light');
 
@@ -76,16 +121,15 @@
 				document.documentElement.setAttribute('data-theme', theme);
 				document.documentElement.style.colorScheme = theme;
 			} catch {
-				document.documentElement.setAttribute('data-theme', 'light');
-				document.documentElement.style.colorScheme = 'light';
+				const fallbackTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+				document.documentElement.setAttribute('data-theme', fallbackTheme);
+				document.documentElement.style.colorScheme = fallbackTheme;
 			}
 		})();
 	</script>
-	<link rel="preconnect" href="https://fonts.googleapis.com" />
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-	<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+	<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 </svelte:head>
 
-<AppShell {title} {theme} {toggleTheme}>
+<AppShell {title} {section} {theme} {toggleTheme}>
 	{@render children()}
 </AppShell>
